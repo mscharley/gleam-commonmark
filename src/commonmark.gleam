@@ -1,18 +1,23 @@
 import commonmark/ast
+import commonmark/internal/html
+import commonmark/internal/parser
 import gleam/list
+import gleam/regex
 import gleam/string
 
-fn parse_paragraph(lines: List(String)) -> ast.Node {
-  ast.Paragraph(string.join(lines, "\n"))
-}
+pub fn parse(document: String) -> ast.Document {
+  let assert Ok(line_splitter) = regex.from_string("\r?\n|\r\n?")
 
-pub fn parse(document: String) -> ast.Node {
   document
   // Security check [SPEC 2.3]
   |> string.replace("\u{0000}", "\u{FFFD}")
-  |> string.split("\n")
-  |> list.chunk(fn(line) { line |> string.trim == "" })
-  |> list.filter(fn(line) { line != [""] })
-  |> list.map(parse_paragraph)
+  |> regex.split(with: line_splitter)
+  |> parser.parse_blocks
   |> ast.Document
+}
+
+pub fn to_html(document: ast.Document) -> String {
+  document.blocks
+  |> list.map(html.block_to_html)
+  |> string.join("")
 }
