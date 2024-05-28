@@ -8,7 +8,8 @@ import gleeunit/should
 pub fn main() {
   commonmark_spec.main()
 
-  io.println("\nGleeUnit tests")
+  io.println("GleeUnit tests")
+  io.println("--------------")
   gleeunit.main()
 }
 
