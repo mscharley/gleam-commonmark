@@ -13,6 +13,7 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
 
 pub fn block_to_html(block: ast.BlockNode) -> String {
   case block {
+    ast.HorizontalBreak -> "<hr />\n"
     ast.Paragraph(contents) ->
       "<p>"
       <> { contents |> list.map(inline_to_html) |> string.join("") }

@@ -1,5 +1,7 @@
 import commonmark/ast
 import gleam/list
+import gleam/regex
+import gleam/result
 import gleam/string
 
 pub fn parse_text(text: List(String)) -> List(ast.InlineNode) {
@@ -39,13 +41,21 @@ fn do_parse_blocks(
   acc: List(ast.BlockNode),
   lines: List(String),
 ) -> List(ast.BlockNode) {
-  case state, lines {
-    s, [] -> [parse_block_state(s), ..acc] |> list.reverse
-    _, ["", ..ls] ->
+  let assert Ok(hr_regex) =
+    regex.from_string(
+      "^ {0,3}(?:\\*[* \t]*\\*[* \t]*\\*|\\-[- \t]*\\-[- \t]*\\-|\\_[_ \t]*\\_[_ \t]*\\_)[ \t]*$",
+    )
+  let l = list.first(lines) |> result.unwrap("")
+
+  case state, lines, l |> regex.check(with: hr_regex) {
+    s, [], _ -> [parse_block_state(s), ..acc] |> list.reverse
+    _, ["", ..ls], _ ->
       do_parse_blocks(OutsideBlock, [parse_block_state(state), ..acc], ls)
-    OutsideBlock, [line, ..ls] ->
+    OutsideBlock, [_, ..ls], True ->
+      do_parse_blocks(OutsideBlock, [ast.HorizontalBreak, ..acc], ls)
+    OutsideBlock, [line, ..ls], _ ->
       do_parse_blocks(ParagraphBuilder([line]), acc, ls)
-    ParagraphBuilder(bs), [line, ..ls] ->
+    ParagraphBuilder(bs), [line, ..ls], _ ->
       do_parse_blocks(ParagraphBuilder([line, ..bs]), acc, ls)
   }
 }
