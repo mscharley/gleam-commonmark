@@ -21,3 +21,7 @@ pub fn to_html(document: ast.Document) -> String {
   |> list.map(html.block_to_html)
   |> string.join("")
 }
+
+pub fn render_to_html(document: String) -> String {
+  document |> parse |> to_html
+}

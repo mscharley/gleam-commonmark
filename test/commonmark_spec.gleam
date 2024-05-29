@@ -48,8 +48,7 @@ fn run_section(ts: #(String, List(Test))) {
 fn run_test(t: Test) {
   it("Example " <> int.to_string(t.example), fn() {
     t.markdown
-    |> commonmark.parse
-    |> commonmark.to_html
+    |> commonmark.render_to_html
     |> expect.to_equal(t.html)
   })
 }
