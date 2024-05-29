@@ -15,7 +15,6 @@ pub type ListItem {
 }
 
 pub type BlockNode {
-  EmptyBlock
   HorizontalBreak
   Heading(level: Int, contents: List(InlineNode))
   CodeBlock(info: String, contents: String)

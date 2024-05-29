@@ -13,6 +13,7 @@ pub fn parse(document: String) -> ast.Document {
   |> string.replace("\u{0000}", "\u{FFFD}")
   |> regex.split(with: line_splitter)
   |> parser.parse_blocks
+  |> list.flat_map(parser.parse_block_state)
   |> ast.Document
 }
 

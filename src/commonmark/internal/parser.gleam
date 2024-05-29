@@ -1,6 +1,6 @@
 import commonmark/ast
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/regex.{Match}
 import gleam/result
 import gleam/string
@@ -25,23 +25,33 @@ pub fn parse_paragraph(lines: List(String)) -> ast.BlockNode {
   |> ast.Paragraph
 }
 
-type BlockParseState {
+type ParserState {
   OutsideBlock
-  ParagraphBuilder(lines: List(String))
+  ParagraphBuilder(List(String))
 }
 
-fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
+pub opaque type BlockParseState {
+  Paragraph(List(String))
+  HorizontalBreak
+  Heading(Int, Option(String))
+}
+
+pub fn parse_block_state(state: BlockParseState) -> List(ast.BlockNode) {
   case state {
-    OutsideBlock -> ast.EmptyBlock
-    ParagraphBuilder(lines) -> parse_paragraph(list.reverse(lines))
+    Paragraph(lines) -> [parse_paragraph(list.reverse(lines))]
+    HorizontalBreak -> [ast.HorizontalBreak]
+    Heading(level, Some(contents)) -> [
+      ast.Heading(level, parse_text([contents])),
+    ]
+    Heading(level, None) -> [ast.Heading(level, parse_text([]))]
   }
 }
 
 fn do_parse_blocks(
-  state: BlockParseState,
-  acc: List(ast.BlockNode),
+  state: ParserState,
+  acc: List(BlockParseState),
   lines: List(String),
-) -> List(ast.BlockNode) {
+) -> List(BlockParseState) {
   let assert Ok(hr_regex) =
     regex.from_string(
       "^ {0,3}(?:\\*[* \t]*\\*[* \t]*\\*|\\-[- \t]*\\-[- \t]*\\-|\\_[_ \t]*\\_[_ \t]*\\_)[ \t]*$",
@@ -58,21 +68,24 @@ fn do_parse_blocks(
     l
     |> regex.scan(with: atx_header_regex)
   {
-    s, [], _, _ -> [parse_block_state(s), ..acc] |> list.reverse
-    _, ["", ..ls], _, _ ->
-      do_parse_blocks(OutsideBlock, [parse_block_state(state), ..acc], ls)
+    ParagraphBuilder(lines), [], _, _ ->
+      [Paragraph(lines), ..acc] |> list.reverse
+    _, [], _, _ -> acc |> list.reverse
+    ParagraphBuilder(bs), ["", ..ls], _, _ ->
+      do_parse_blocks(OutsideBlock, [Paragraph(bs), ..acc], ls)
+    _, ["", ..ls], _, _ -> do_parse_blocks(OutsideBlock, acc, ls)
     OutsideBlock, [_, ..ls], True, _ ->
-      do_parse_blocks(OutsideBlock, [ast.HorizontalBreak, ..acc], ls)
+      do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls)
     OutsideBlock, [_, ..ls], _, [Match(_, [Some(heading)])] ->
       do_parse_blocks(
         OutsideBlock,
-        [ast.Heading(string.length(heading), parse_text([])), ..acc],
+        [Heading(string.length(heading), None), ..acc],
         ls,
       )
     OutsideBlock, [_, ..ls], _, [Match(_, [Some(heading), Some(contents)])] ->
       do_parse_blocks(
         OutsideBlock,
-        [ast.Heading(string.length(heading), parse_text([contents])), ..acc],
+        [Heading(string.length(heading), Some(contents)), ..acc],
         ls,
       )
     ParagraphBuilder(bs),
@@ -82,11 +95,7 @@ fn do_parse_blocks(
     ->
       do_parse_blocks(
         OutsideBlock,
-        [
-          ast.Heading(string.length(heading), parse_text([contents])),
-          parse_block_state(ParagraphBuilder(bs)),
-          ..acc
-        ],
+        [Heading(string.length(heading), Some(contents)), Paragraph(bs), ..acc],
         ls,
       )
     OutsideBlock, [line, ..ls], _, _ ->
@@ -96,12 +105,6 @@ fn do_parse_blocks(
   }
 }
 
-pub fn parse_blocks(lines: List(String)) -> List(ast.BlockNode) {
+pub fn parse_blocks(lines: List(String)) -> List(BlockParseState) {
   do_parse_blocks(OutsideBlock, [], lines)
-  |> list.filter(fn(x) {
-    case x {
-      ast.EmptyBlock -> False
-      _ -> True
-    }
-  })
 }
