@@ -5,6 +5,8 @@ import gleam/string
 pub fn inline_to_html(inline: ast.InlineNode) -> String {
   case inline {
     ast.Text(contents) -> contents
+    ast.HardLineBreak -> "<br />\n"
+    ast.SoftLineBreak -> "\n"
     _ -> ""
   }
 }

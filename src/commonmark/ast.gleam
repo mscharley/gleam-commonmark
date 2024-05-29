@@ -1,11 +1,13 @@
 pub type InlineNode {
   CodeSpan(contents: String)
   Emphasis(contents: List(InlineNode))
-  Link(title: String, href: String)
+  Link(title: List(InlineNode), href: String)
   Image(title: String, href: String)
   Autolink(href: String)
   // HtmlInline() // TODO: [SPEC 6.6]
   Text(contents: String)
+  HardLineBreak
+  SoftLineBreak
 }
 
 pub type ListItem {
@@ -13,6 +15,7 @@ pub type ListItem {
 }
 
 pub type BlockNode {
+  EmptyBlock
   HorizontalBreak
   Heading(level: Int, contents: List(InlineNode))
   CodeBlock(info: String, contents: String)
