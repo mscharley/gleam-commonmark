@@ -1,4 +1,5 @@
 import commonmark/ast
+import gleam/int
 import gleam/list
 import gleam/string
 
@@ -13,6 +14,14 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
 
 pub fn block_to_html(block: ast.BlockNode) -> String {
   case block {
+    ast.Heading(level, contents) ->
+      "<h"
+      <> int.to_string(level)
+      <> ">"
+      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> "</h"
+      <> int.to_string(level)
+      <> ">\n"
     ast.HorizontalBreak -> "<hr />\n"
     ast.Paragraph(contents) ->
       "<p>"

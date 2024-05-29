@@ -1,6 +1,7 @@
 import commonmark/ast
 import gleam/list
-import gleam/regex
+import gleam/option.{None, Some}
+import gleam/regex.{Match}
 import gleam/result
 import gleam/string
 
@@ -45,17 +46,52 @@ fn do_parse_blocks(
     regex.from_string(
       "^ {0,3}(?:\\*[* \t]*\\*[* \t]*\\*|\\-[- \t]*\\-[- \t]*\\-|\\_[_ \t]*\\_[_ \t]*\\_)[ \t]*$",
     )
+  let assert Ok(atx_header_regex) =
+    regex.from_string("^ {0,3}(#{1,6})([ \t]+.*?)?(?:(?<=[ \t])#*)?[ \t]*$")
   let l = list.first(lines) |> result.unwrap("")
 
-  case state, lines, l |> regex.check(with: hr_regex) {
-    s, [], _ -> [parse_block_state(s), ..acc] |> list.reverse
-    _, ["", ..ls], _ ->
+  case
+    state,
+    lines,
+    l
+    |> regex.check(with: hr_regex),
+    l
+    |> regex.scan(with: atx_header_regex)
+  {
+    s, [], _, _ -> [parse_block_state(s), ..acc] |> list.reverse
+    _, ["", ..ls], _, _ ->
       do_parse_blocks(OutsideBlock, [parse_block_state(state), ..acc], ls)
-    OutsideBlock, [_, ..ls], True ->
+    OutsideBlock, [_, ..ls], True, _ ->
       do_parse_blocks(OutsideBlock, [ast.HorizontalBreak, ..acc], ls)
-    OutsideBlock, [line, ..ls], _ ->
+    OutsideBlock, [_, ..ls], _, [Match(_, [Some(heading)])] ->
+      do_parse_blocks(
+        OutsideBlock,
+        [ast.Heading(string.length(heading), parse_text([])), ..acc],
+        ls,
+      )
+    OutsideBlock, [_, ..ls], _, [Match(_, [Some(heading), Some(contents)])] ->
+      do_parse_blocks(
+        OutsideBlock,
+        [ast.Heading(string.length(heading), parse_text([contents])), ..acc],
+        ls,
+      )
+    ParagraphBuilder(bs),
+      [_, ..ls],
+      _,
+      [Match(_, [Some(heading), Some(contents)])]
+    ->
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          ast.Heading(string.length(heading), parse_text([contents])),
+          parse_block_state(ParagraphBuilder(bs)),
+          ..acc
+        ],
+        ls,
+      )
+    OutsideBlock, [line, ..ls], _, _ ->
       do_parse_blocks(ParagraphBuilder([line]), acc, ls)
-    ParagraphBuilder(bs), [line, ..ls], _ ->
+    ParagraphBuilder(bs), [line, ..ls], _, _ ->
       do_parse_blocks(ParagraphBuilder([line, ..bs]), acc, ls)
   }
 }
