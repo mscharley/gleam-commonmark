@@ -90,6 +90,6 @@ fn run_test(t: Test) {
   f("Example " <> int.to_string(t.example), fn() {
     t.markdown
     |> commonmark.render_to_html
-    |> expect.to_equal(t.html)
+    |> expect.to_equal(Ok(t.html))
   })
 }

@@ -8,5 +8,5 @@ import startest/expect
 pub fn setext_header_ambiguity_test() {
   "foo\nbar\n---\nbaz"
   |> commonmark.render_to_html
-  |> expect.to_equal("<h2>foo\nbar</h2>\n<p>baz</p>\n")
+  |> expect.to_equal(Ok("<h2>foo\nbar</h2>\n<p>baz</p>\n"))
 }
