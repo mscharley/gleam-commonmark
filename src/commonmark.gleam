@@ -25,7 +25,18 @@ pub fn parse(document: String) -> ast.Document {
 }
 
 /// Render an AST into a HTML string.
-pub fn to_html(document: ast.Document) -> Result(String, Nil) {
+///
+/// This version follows the advice in the CommonMark spec to silently resolve errors.
+pub fn to_html(document: ast.Document) -> String {
+  document.blocks
+  |> list.map(html.block_to_html)
+  |> string.join("")
+}
+
+/// Render an AST into a HTML string.
+/// 
+/// This uses a more strict rendered that won't attempt to fix issues in the document.
+pub fn to_html_strict(document: ast.Document) -> Result(String, Nil) {
   document.blocks
   |> list.map(html.block_to_html)
   |> string.join("")
@@ -33,6 +44,15 @@ pub fn to_html(document: ast.Document) -> Result(String, Nil) {
 }
 
 /// Render a CommonMark document into a HTML string.
-pub fn render_to_html(document: String) -> Result(String, Nil) {
+///
+/// This version follows the advice in the CommonMark spec to silently resolve errors.
+pub fn render_to_html(document: String) -> String {
   document |> parse |> to_html
+}
+
+/// Render a CommonMark document into a HTML string.
+/// 
+/// This uses a more strict rendered that won't attempt to fix issues in the document.
+pub fn render_to_html_strict(document: String) -> Result(String, Nil) {
+  document |> parse |> to_html_strict
 }

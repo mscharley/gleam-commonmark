@@ -15,6 +15,7 @@ import gleam/option.{type Option}
 pub type InlineNode {
   CodeSpan(contents: String)
   Emphasis(contents: List(InlineNode))
+  StrongEmphasis(contents: List(InlineNode))
   Link(title: List(InlineNode), href: String)
   Image(title: String, href: String)
   Autolink(href: String)
@@ -32,7 +33,7 @@ pub type ListItem {
 pub type BlockNode {
   HorizontalBreak
   Heading(level: Int, contents: List(InlineNode))
-  CodeBlock(info: Option(String), contents: String)
+  CodeBlock(info: Option(String), full_info: Option(String), contents: String)
   HtmlBlock(html: String)
   LinkReference(name: String, href: String)
   Paragraph(contents: List(InlineNode))
