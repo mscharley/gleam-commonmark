@@ -20,12 +20,16 @@ pub opaque type BlockParseState {
 
 pub fn parse_text(text: List(String)) -> List(ast.InlineNode) {
   let len = list.length(text) - 1
+  let assert Ok(hard_break_regex) = regex.from_string("(  |\\\\)$")
 
   text
   |> list.index_map(fn(l, i) {
-    case l |> string.ends_with("  ") {
+    case regex.check(l, with: hard_break_regex) {
       _ if i == len -> [ast.Text(l |> string.trim)]
-      True -> [ast.Text(l |> string.trim), ast.HardLineBreak]
+      True -> [
+        ast.Text(l |> string.drop_right(1) |> string.trim),
+        ast.HardLineBreak,
+      ]
       _ -> [ast.Text(l |> string.trim), ast.SoftLineBreak]
     }
   })

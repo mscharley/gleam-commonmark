@@ -4,17 +4,47 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
 
+pub fn sanitize_href_property(prop: String) -> String {
+  // TODO: This needs to be implemented
+  prop
+  |> string.replace("&", "&amp;")
+  |> string.replace("\"", "%22")
+}
+
+pub fn sanitize_plain_text(text: String) -> String {
+  // TODO: This needs to be implemented
+  text
+  |> string.replace("&", "&amp;")
+  |> string.replace("<", "&lt;")
+  |> string.replace(">", "&gt;")
+}
+
 pub fn inline_to_html(inline: ast.InlineNode) -> String {
   case inline {
-    ast.Text(contents) -> contents
+    ast.Text(contents) -> contents |> sanitize_plain_text
     ast.HardLineBreak -> "<br />\n"
     ast.SoftLineBreak -> "\n"
-    ast.Autolink(_) -> "Autolink"
-    ast.CodeSpan(_) -> "CodeSpan"
-    ast.Emphasis(_) -> "Emphasis"
-    ast.StrongEmphasis(_) -> "StrongEmphasis"
+    ast.UriAutolink(href) ->
+      "<a href=\"" <> sanitize_href_property(href) <> "\">" <> href <> "</a>"
+    ast.EmailAutolink(email) ->
+      "<a href=\"mailto:"
+      <> sanitize_href_property(email)
+      <> "\">"
+      <> email
+      <> "</a>"
+    ast.CodeSpan(contents) ->
+      "<code>" <> { contents |> sanitize_plain_text } <> "</code>"
+    ast.Emphasis(contents) ->
+      "<em>"
+      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> "</em>"
+    ast.StrongEmphasis(contents) ->
+      "<strong>"
+      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> "</strong>"
     ast.HtmlInline(html) -> html
     ast.Image(_, _) -> "Image"
+    ast.ReferenceLink(_, _) -> "Link"
     ast.Link(_, _) -> "Link"
   }
 }
@@ -23,12 +53,12 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
   case block {
     ast.LinkReference(_, _) -> ""
     ast.CodeBlock(None, _, contents) ->
-      "<pre><code>" <> contents <> "</code></pre>\n"
+      "<pre><code>" <> { contents |> sanitize_plain_text } <> "</code></pre>\n"
     ast.CodeBlock(Some(info), _, contents) ->
       "<pre><code class=\"language-"
       <> info
       <> "\">"
-      <> contents
+      <> { contents |> sanitize_plain_text }
       <> "</code></pre>\n"
     ast.Heading(level, contents) ->
       "<h"
@@ -44,8 +74,47 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
       <> { contents |> list.map(inline_to_html) |> string.join("") }
       <> "</p>\n"
     ast.HtmlBlock(html) -> html <> "\n"
-    ast.BlockQuote(_) -> "BlockQuote"
-    ast.OrderedList(_) -> "Lists unsupported\n"
-    ast.UnorderedList(_) -> "Lists unsupported\n"
+    ast.BlockQuote(contents) ->
+      "<blockquote>"
+      <> { contents |> list.map(block_to_html) |> string.join("") }
+      <> "</blockquote>\n"
+    ast.OrderedList(items, 1) ->
+      "<ol>"
+      <> {
+        items
+        |> list.map(fn(item) {
+          "<li>"
+          <> { item.contents |> list.map(block_to_html) |> string.join("") }
+          <> "</li>"
+        })
+        |> string.join("")
+      }
+      <> "</ol>/n"
+    ast.OrderedList(items, start) ->
+      "<ol start=\""
+      <> int.to_string(start)
+      <> "\">"
+      <> {
+        items
+        |> list.map(fn(item) {
+          "<li>"
+          <> { item.contents |> list.map(block_to_html) |> string.join("") }
+          <> "</li>"
+        })
+        |> string.join("")
+      }
+      <> "</ol>/n"
+    ast.UnorderedList(items) ->
+      "<ul>"
+      <> {
+        items
+        |> list.map(fn(item) {
+          "<li>"
+          <> { item.contents |> list.map(block_to_html) |> string.join("") }
+          <> "</li>"
+        })
+        |> string.join("")
+      }
+      <> "</ul>/n"
   }
 }

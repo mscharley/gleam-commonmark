@@ -17,8 +17,10 @@ pub type InlineNode {
   Emphasis(contents: List(InlineNode))
   StrongEmphasis(contents: List(InlineNode))
   Link(title: List(InlineNode), href: String)
+  ReferenceLink(title: List(InlineNode), ref: String)
   Image(title: String, href: String)
-  Autolink(href: String)
+  UriAutolink(href: String)
+  EmailAutolink(href: String)
   HtmlInline(html: String)
   /// Text contents shouldn't contain line breaks. See HardLineBreak and SoftLineBreak for the canonical representation of line breaks that renderers can make decisions about.
   Text(contents: String)
@@ -38,7 +40,7 @@ pub type BlockNode {
   LinkReference(name: String, href: String)
   Paragraph(contents: List(InlineNode))
   BlockQuote(contents: List(BlockNode))
-  OrderedList(contents: List(ListItem))
+  OrderedList(contents: List(ListItem), start: Int)
   UnorderedList(contents: List(ListItem))
 }
 
