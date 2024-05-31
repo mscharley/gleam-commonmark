@@ -34,11 +34,11 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
       <> "</a>"
     ast.CodeSpan(contents) ->
       "<code>" <> { contents |> sanitize_plain_text } <> "</code>"
-    ast.Emphasis(contents) ->
+    ast.Emphasis(contents, _) ->
       "<em>"
       <> { contents |> list.map(inline_to_html) |> string.join("") }
       <> "</em>"
-    ast.StrongEmphasis(contents) ->
+    ast.StrongEmphasis(contents, _) ->
       "<strong>"
       <> { contents |> list.map(inline_to_html) |> string.join("") }
       <> "</strong>"
@@ -50,6 +50,9 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
     ast.Image(_, _) -> "Image"
     ast.ReferenceLink(_, _) -> "Link"
     ast.Link(_, _) -> "Link"
+    ast.NamedEntity("amp", _) -> "&amp;"
+    ast.NamedEntity(_, cp) -> string.from_utf_codepoints(cp)
+    ast.NumericCharacterReference(cp, _) -> string.from_utf_codepoints([cp])
   }
 }
 
@@ -82,7 +85,7 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
       "<blockquote>"
       <> { contents |> list.map(block_to_html) |> string.join("") }
       <> "</blockquote>\n"
-    ast.OrderedList(items, 1) ->
+    ast.OrderedList(items, 1, _) ->
       "<ol>"
       <> {
         items
@@ -94,7 +97,7 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
         |> string.join("")
       }
       <> "</ol>/n"
-    ast.OrderedList(items, start) ->
+    ast.OrderedList(items, start, _) ->
       "<ol start=\""
       <> int.to_string(start)
       <> "\">"
@@ -108,7 +111,7 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
         |> string.join("")
       }
       <> "</ol>/n"
-    ast.UnorderedList(items) ->
+    ast.UnorderedList(items, _) ->
       "<ul>"
       <> {
         items
