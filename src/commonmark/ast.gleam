@@ -25,7 +25,7 @@ pub type InlineNode {
   StrongEmphasis(contents: List(InlineNode), marker: EmphasisMarker)
   StrikeThrough(contents: List(InlineNode))
   Link(contents: List(InlineNode), title: Option(String), href: String)
-  ReferenceLink(content: List(InlineNode), ref: String)
+  ReferenceLink(contents: List(InlineNode), ref: String)
   Image(title: Option(String), href: String)
   UriAutolink(href: String)
   EmailAutolink(href: String)
