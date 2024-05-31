@@ -49,7 +49,7 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
     ast.HtmlInline(html) -> html
     ast.Image(_, _) -> "Image"
     ast.ReferenceLink(_, _) -> "Link"
-    ast.Link(_, _) -> "Link"
+    ast.Link(_, _, _) -> "Link"
     ast.NamedEntity("amp", _) -> "&amp;"
     ast.NamedEntity(_, cp) -> string.from_utf_codepoints(cp)
     ast.NumericCharacterReference(cp, _) -> string.from_utf_codepoints([cp])
@@ -58,7 +58,6 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
 
 pub fn block_to_html(block: ast.BlockNode) -> String {
   case block {
-    ast.LinkReference(_, _) -> ""
     ast.CodeBlock(None, _, contents) ->
       "<pre><code>" <> { contents |> sanitize_plain_text } <> "</code></pre>\n"
     ast.CodeBlock(Some(info), _, contents) ->

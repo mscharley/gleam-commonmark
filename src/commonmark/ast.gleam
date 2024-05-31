@@ -24,9 +24,9 @@ pub type InlineNode {
   Emphasis(contents: List(InlineNode), marker: EmphasisMarker)
   StrongEmphasis(contents: List(InlineNode), marker: EmphasisMarker)
   StrikeThrough(contents: List(InlineNode))
-  Link(title: List(InlineNode), href: String)
-  ReferenceLink(title: List(InlineNode), ref: String)
-  Image(title: String, href: String)
+  Link(contents: List(InlineNode), title: Option(String), href: String)
+  ReferenceLink(content: List(InlineNode), ref: String)
+  Image(title: Option(String), href: String)
   UriAutolink(href: String)
   EmailAutolink(href: String)
   HtmlInline(html: String)
@@ -70,15 +70,19 @@ pub type BlockNode {
   Heading(level: Int, contents: List(InlineNode))
   CodeBlock(info: Option(String), full_info: Option(String), contents: String)
   HtmlBlock(html: String)
-  LinkReference(name: String, href: String)
   Paragraph(contents: List(InlineNode))
   BlockQuote(contents: List(BlockNode))
   OrderedList(contents: List(ListItem), start: Int, marker: OrderedListMarker)
   UnorderedList(contents: List(ListItem), marker: UnorderedListMarker)
 }
 
+/// A reference used with ReferenceLink nodes
+pub type Reference {
+  Reference(href: String, title: Option(String))
+}
+
 /// Documents contain all the information necessary to render a document, both structural and
 /// metadata.
 pub type Document {
-  Document(blocks: List(BlockNode), references: Dict(String, String))
+  Document(blocks: List(BlockNode), references: Dict(String, Reference))
 }
