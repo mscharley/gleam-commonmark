@@ -92,9 +92,14 @@ fn do_parse_blocks(
       |> list.reverse
     OutsideBlock, [], _, _, _, _ -> acc |> list.reverse
     // Blank line ending a paragraph
-    ParagraphBuilder(bs), ["", ..ls], _, _, _, _ ->
-      do_parse_blocks(OutsideBlock, [Paragraph(bs), ..acc], ls)
-    _, ["", ..ls], _, _, _, _ -> do_parse_blocks(OutsideBlock, acc, ls)
+    ParagraphBuilder(bs), ["  ", ..ls], _, _, _, _
+    | ParagraphBuilder(bs), ["\\", ..ls], _, _, _, _
+    | ParagraphBuilder(bs), ["", ..ls], _, _, _, _
+    -> do_parse_blocks(OutsideBlock, [Paragraph(bs), ..acc], ls)
+    OutsideBlock, ["  ", ..ls], _, _, _, _
+    | OutsideBlock, ["\\", ..ls], _, _, _, _
+    | OutsideBlock, ["", ..ls], _, _, _, _
+    -> do_parse_blocks(OutsideBlock, acc, ls)
     // Fenced code blocks
     ParagraphBuilder(bs), [_, ..ls], _, _, _, [Match(_, [Some(exit)])] ->
       do_parse_blocks(
