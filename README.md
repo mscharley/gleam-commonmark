@@ -72,4 +72,3 @@ The current version of GFM targetted is [0.29-gfm][gfm].
 gleam test  # Run the tests
 gleam shell # Run an Erlang shell
 ```
-

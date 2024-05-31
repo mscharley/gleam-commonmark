@@ -42,6 +42,10 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
       "<strong>"
       <> { contents |> list.map(inline_to_html) |> string.join("") }
       <> "</strong>"
+    ast.StrikeThrough(contents) ->
+      "<s>"
+      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> "</s>"
     ast.HtmlInline(html) -> html
     ast.Image(_, _) -> "Image"
     ast.ReferenceLink(_, _) -> "Link"
