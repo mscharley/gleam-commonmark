@@ -2,6 +2,8 @@
 
 [![Package Version](https://img.shields.io/hexpm/v/commonmark)](https://hex.pm/packages/commonmark)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/commonmark/)
+![Erlang-compatible](https://img.shields.io/badge/target-erlang-b83998)
+![JavaScript-compatible](https://img.shields.io/badge/target-javascript-f1e05a)
 
 ```sh
 gleam add commonmark
