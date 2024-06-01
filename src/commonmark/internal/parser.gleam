@@ -13,6 +13,7 @@ type BlockState {
 
 type InlineState {
   TextAccumulator(List(String))
+  AutolinkAccumulator(List(String))
 }
 
 pub opaque type BlockParseState {
@@ -22,12 +23,31 @@ pub opaque type BlockParseState {
   CodeBlock(Option(String), Option(String), String)
 }
 
+fn parse_autolink(href: String) -> ast.InlineNode {
+  // Borrowed direct from the spec
+  let assert Ok(email_regex) =
+    regex.from_string(
+      "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+    )
+  let assert Ok(uri_regex) = regex.from_string("^[a-zA-Z][-a-zA-Z+.]{1,31}:")
+
+  case regex.check(email_regex, href), regex.check(uri_regex, href) {
+    True, _ -> ast.EmailAutolink(href)
+    _, True -> ast.UriAutolink(href)
+    False, False -> ast.Text("<" <> href <> ">")
+  }
+}
+
 fn do_parse_text(
   text: List(String),
   state: InlineState,
   acc: List(ast.InlineNode),
 ) -> List(ast.InlineNode) {
   case state, text {
+    AutolinkAccumulator(ts), [] -> [
+      ast.Text(["<", ..list.reverse(ts)] |> string.join("")),
+      ..acc
+    ]
     TextAccumulator(ts), [] ->
       [ast.Text(ts |> list.reverse |> string.join("") |> string.trim), ..acc]
       |> list.reverse
@@ -39,12 +59,42 @@ fn do_parse_text(
         ast.Text(ts |> list.reverse |> string.join("") |> string.trim),
         ..acc
       ])
+    AutolinkAccumulator(ts), [" ", " ", "\n", ..gs]
+    | AutolinkAccumulator(ts), ["\\", "\n", ..gs]
+    ->
+      do_parse_text(gs, TextAccumulator([]), [
+        ast.HardLineBreak,
+        ast.Text(list.reverse(["<", ..ts]) |> string.join("")),
+        ..acc
+      ])
     TextAccumulator(ts), ["\n", ..gs] ->
       do_parse_text(gs, TextAccumulator([]), [
         ast.SoftLineBreak,
         ast.Text(ts |> list.reverse |> string.join("") |> string.trim),
         ..acc
       ])
+    AutolinkAccumulator(ts), ["\n", ..gs] ->
+      do_parse_text(gs, TextAccumulator([]), [
+        ast.SoftLineBreak,
+        ast.Text(list.reverse(["<", ..ts]) |> string.join("")),
+        ..acc
+      ])
+    TextAccumulator(ts), ["<", ..gs] ->
+      do_parse_text(gs, AutolinkAccumulator([]), [
+        ast.Text(ts |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    AutolinkAccumulator(ts), ["\t" as space, ..gs]
+    | AutolinkAccumulator(ts), [" " as space, ..gs]
+    ->
+      do_parse_text(gs, TextAccumulator([space, ..list.append(ts, ["<"])]), acc)
+    AutolinkAccumulator(ts), [">", ..gs] ->
+      do_parse_text(gs, TextAccumulator([]), [
+        parse_autolink(ts |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    AutolinkAccumulator(ts), [g, ..gs] ->
+      do_parse_text(gs, AutolinkAccumulator([g, ..ts]), acc)
     TextAccumulator(ts), [g, ..gs] ->
       do_parse_text(gs, TextAccumulator([g, ..ts]), acc)
   }

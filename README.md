@@ -48,7 +48,7 @@ The current version of CommonMark targetted is [0.31.2][commonmark].
 * ❌ Emphasis and strong emphasis
 * ❌ Links
 * ❌ Images
-* ❌ Autolinks
+* ✅ Autolinks
 * ✅ Hard line breaks
 * ✅ Soft line breaks
 
