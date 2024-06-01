@@ -24,6 +24,10 @@ This is a test."
 
 Further documentation can be found at <https://hexdocs.pm/commonmark>.
 
+[You can view this README as an AST here.][readme-ast]
+
+[readme-ast]: https://github.com/mscharley/gleam-commonmark/tree/main/birdie_snapshots/common_mark_readme.accepted
+
 ## Syntax support
 
 🚧 This package is still heavily under construction 🚧

@@ -1,0 +1,136 @@
+---
+version: 1.1.6
+title: CommonMark readme
+file: ./test/commonmark_readme.gleam
+test_name: readme_test
+---
+Document(
+  [
+    Heading(1, [Text("commonmark")]),
+    Paragraph([
+      Text("[![Package Version](https://img.shields.io/hexpm/v/commonmark)](https://hex.pm/packages/commonmark)"),
+      SoftLineBreak,
+      Text("[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/commonmark/)"),
+      SoftLineBreak,
+      Text("![Erlang-compatible](https://img.shields.io/badge/target-erlang-b83998)"),
+      SoftLineBreak,
+      Text("![JavaScript-compatible](https://img.shields.io/badge/target-javascript-f1e05a)"),
+    ]),
+    CodeBlock(
+      Some("sh"),
+      Some("sh"),
+      "gleam add commonmark
+",
+    ),
+    CodeBlock(
+      Some("gleam"),
+      Some("gleam"),
+      "import commonmark
+import gleam/io
+
+pub fn main() {
+  "# Hello, Gleam!
+
+This is a test."
+  |> commonmark.render_to_html
+  |> io.println
+  // -> "<h1>Hello, Gleam!</h1>\n<p>This is a test.</p>\n"
+}
+",
+    ),
+    Paragraph([
+      Text("Further documentation can be found at "),
+      UriAutolink("https://hexdocs.pm/commonmark"),
+      Text("."),
+    ]),
+    Paragraph([
+      Text("[You can view this README as an AST here.][readme-ast]"),
+    ]),
+    Paragraph([
+      Text("[readme-ast]: https://github.com/mscharley/gleam-commonmark/tree/main/birdie_snapshots/common_mark_readme.accepted"),
+    ]),
+    Heading(2, [Text("Syntax support")]),
+    Paragraph([
+      Text("🚧 This package is still heavily under construction 🚧"),
+    ]),
+    Paragraph([
+      Text("✅ - Completed | 🚧 - In Progress | ❌ - Unsupported"),
+    ]),
+    Heading(3, [Text("CommonMark")]),
+    Paragraph([
+      Text("The current version of CommonMark targetted is [0.31.2][commonmark]."),
+    ]),
+    Paragraph([
+      Text("* ✅ Thematic breaks"),
+      SoftLineBreak,
+      Text("* ✅ ATX headings"),
+      SoftLineBreak,
+      Text("* ✅ Setext headings"),
+      SoftLineBreak,
+      Text("* ❌ Indented code blocks"),
+      SoftLineBreak,
+      Text("* 🚧 Fenced code blocks"),
+      SoftLineBreak,
+      Text("* ❌ Link reference definitions"),
+      SoftLineBreak,
+      Text("* ✅ Paragraphs"),
+      SoftLineBreak,
+      Text("* ❌ Block quotes"),
+      SoftLineBreak,
+      Text("* ❌ Ordered lists"),
+      SoftLineBreak,
+      Text("* ❌ Unordered lists"),
+      SoftLineBreak,
+      Text("* ❌ Code spans"),
+      SoftLineBreak,
+      Text("* ❌ Emphasis and strong emphasis"),
+      SoftLineBreak,
+      Text("* ❌ Links"),
+      SoftLineBreak,
+      Text("* ❌ Images"),
+      SoftLineBreak,
+      Text("* ✅ Autolinks"),
+      SoftLineBreak,
+      Text("* ✅ Hard line breaks"),
+      SoftLineBreak,
+      Text("* ✅ Soft line breaks"),
+    ]),
+    Paragraph([
+      Text("Raw HTML features will be tackled last as the potential security issues around this need to be considered."),
+    ]),
+    Paragraph([
+      Text("* ❌ HTML blocks"),
+      SoftLineBreak,
+      Text("* ❌ Inline HTML"),
+    ]),
+    Paragraph([
+      Text("[commonmark]: https://spec.commonmark.org/0.31.2/"),
+    ]),
+    Heading(
+      3,
+      [
+        Text("Github Flavoured Markdown"),
+      ],
+    ),
+    Paragraph([
+      Text("The current version of GFM targetted is [0.29-gfm][gfm]."),
+    ]),
+    Paragraph([
+      Text("* ❌ Tables"),
+      SoftLineBreak,
+      Text("* ❌ Strikethrough"),
+    ]),
+    Paragraph([
+      Text("[gfm]: https://github.github.com/gfm/"),
+    ]),
+    Heading(2, [Text("Development")]),
+    CodeBlock(
+      Some("sh"),
+      Some("sh"),
+      "gleam test  # Run the tests
+gleam shell # Run an Erlang shell
+",
+    ),
+  ],
+  dict.from_list([]),
+)
