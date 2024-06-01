@@ -12,12 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '.tool-versions'
+          cache: 'npm'
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27.0"
           gleam-version: "1.2.0"
-          # rebar3-version: "3"
+          rebar3-version: "3"
           # elixir-version: "1.15.4"
       - run: gleam deps download
       - run: gleam test
+      - run: gleam test --target js
       - run: gleam format --check src test
