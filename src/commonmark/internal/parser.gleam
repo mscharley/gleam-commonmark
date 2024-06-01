@@ -61,7 +61,7 @@ fn do_parse_blocks(
 ) -> List(BlockParseState) {
   let assert Ok(hr_regex) =
     regex.from_string(
-      "^ {0,3}(?:\\*[* \t]*\\*[* \t]*\\*|\\-[- \t]*\\-[- \t]*\\-|\\_[_ \t]*\\_[_ \t]*\\_)[ \t]*$",
+      "^ {0,3}(?:\\*[* \t]*\\*[* \t]*\\*|-[- \t]*-[- \t]*-|_[_ \t]*_[_ \t]*_)[ \t]*$",
     )
   let assert Ok(atx_header_regex) =
     regex.from_string("^ {0,3}(#{1,6})([ \t]+.*?)?(?:(?<=[ \t])#*)?[ \t]*$")
