@@ -5,57 +5,67 @@ import gleam/regex.{Match}
 import gleam/result
 import gleam/string
 
-type ParserState {
+type BlockState {
   OutsideBlock
   ParagraphBuilder(List(String))
   CodeBlockBuilder(String, Option(String), Option(String), List(String))
 }
 
+type InlineState {
+  TextAccumulator(List(String))
+}
+
 pub opaque type BlockParseState {
-  Paragraph(List(String))
+  Paragraph(String)
   HorizontalBreak
-  Heading(Int, Option(List(String)))
-  CodeBlock(Option(String), Option(String), List(String))
+  Heading(Int, Option(String))
+  CodeBlock(Option(String), Option(String), String)
 }
 
-pub fn parse_text(text: List(String)) -> List(ast.InlineNode) {
-  let len = list.length(text) - 1
-  let assert Ok(hard_break_regex) = regex.from_string("(  |\\\\)$")
-
-  text
-  |> list.index_map(fn(l, i) {
-    case regex.check(l, with: hard_break_regex) {
-      _ if i == len -> [ast.Text(l |> string.trim)]
-      True -> [
-        ast.Text(l |> string.drop_right(1) |> string.trim),
+fn do_parse_text(
+  text: List(String),
+  state: InlineState,
+  acc: List(ast.InlineNode),
+) -> List(ast.InlineNode) {
+  case state, text {
+    TextAccumulator(ts), [] ->
+      [ast.Text(ts |> list.reverse |> string.join("") |> string.trim), ..acc]
+      |> list.reverse
+    TextAccumulator(ts), [" ", " ", "\n", ..gs]
+    | TextAccumulator(ts), ["\\", "\n", ..gs]
+    ->
+      do_parse_text(gs, TextAccumulator([]), [
         ast.HardLineBreak,
-      ]
-      _ -> [ast.Text(l |> string.trim), ast.SoftLineBreak]
-    }
-  })
-  |> list.concat
+        ast.Text(ts |> list.reverse |> string.join("") |> string.trim),
+        ..acc
+      ])
+    TextAccumulator(ts), ["\n", ..gs] ->
+      do_parse_text(gs, TextAccumulator([]), [
+        ast.SoftLineBreak,
+        ast.Text(ts |> list.reverse |> string.join("") |> string.trim),
+        ..acc
+      ])
+    TextAccumulator(ts), [g, ..gs] ->
+      do_parse_text(gs, TextAccumulator([g, ..ts]), acc)
+  }
 }
 
-pub fn parse_paragraph(lines: List(String)) -> ast.BlockNode {
-  lines
-  |> parse_text
-  |> ast.Paragraph
+pub fn parse_text(text: String) -> List(ast.InlineNode) {
+  text |> string.to_graphemes |> do_parse_text(TextAccumulator([]), [])
 }
 
 pub fn parse_block_state(state: BlockParseState) -> List(ast.BlockNode) {
   case state {
-    Paragraph(lines) -> [lines |> list.reverse |> parse_text |> ast.Paragraph]
-    CodeBlock(info, full_info, lines) -> [
-      ast.CodeBlock(info, full_info, lines |> list.reverse |> string.join("\n")),
-    ]
+    Paragraph(lines) -> [lines |> parse_text |> ast.Paragraph]
+    CodeBlock(info, full_info, lines) -> [ast.CodeBlock(info, full_info, lines)]
     HorizontalBreak -> [ast.HorizontalBreak]
     Heading(level, Some(contents)) -> [ast.Heading(level, parse_text(contents))]
-    Heading(level, None) -> [ast.Heading(level, parse_text([]))]
+    Heading(level, None) -> [ast.Heading(level, [])]
   }
 }
 
 fn do_parse_blocks(
-  state: ParserState,
+  state: BlockState,
   acc: List(BlockParseState),
   lines: List(String),
 ) -> List(BlockParseState) {
@@ -84,18 +94,30 @@ fn do_parse_blocks(
   {
     // Run out of lines...
     ParagraphBuilder(lines), [], _, _, _, _ ->
-      [Paragraph(lines), ..acc] |> list.reverse
+      [Paragraph(lines |> string.join("\n")), ..acc] |> list.reverse
     CodeBlockBuilder(_, info, full_info, contents), [""], _, _, _, _
     | CodeBlockBuilder(_, info, full_info, contents), [], _, _, _, _
     ->
-      [CodeBlock(info, full_info, ["", ..contents]), ..acc]
+      [
+        CodeBlock(
+          info,
+          full_info,
+          ["", ..contents] |> list.reverse |> string.join("\n"),
+        ),
+        ..acc
+      ]
       |> list.reverse
     OutsideBlock, [], _, _, _, _ -> acc |> list.reverse
     // Blank line ending a paragraph
     ParagraphBuilder(bs), ["  ", ..ls], _, _, _, _
     | ParagraphBuilder(bs), ["\\", ..ls], _, _, _, _
     | ParagraphBuilder(bs), ["", ..ls], _, _, _, _
-    -> do_parse_blocks(OutsideBlock, [Paragraph(bs), ..acc], ls)
+    ->
+      do_parse_blocks(
+        OutsideBlock,
+        [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
+        ls,
+      )
     OutsideBlock, ["  ", ..ls], _, _, _, _
     | OutsideBlock, ["\\", ..ls], _, _, _, _
     | OutsideBlock, ["", ..ls], _, _, _, _
@@ -104,7 +126,7 @@ fn do_parse_blocks(
     ParagraphBuilder(bs), [_, ..ls], _, _, _, [Match(_, [Some(exit)])] ->
       do_parse_blocks(
         CodeBlockBuilder(exit, None, None, []),
-        [Paragraph(bs), ..acc],
+        [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
         ls,
       )
     ParagraphBuilder(bs),
@@ -116,7 +138,7 @@ fn do_parse_blocks(
     ->
       do_parse_blocks(
         CodeBlockBuilder(exit, info, full_info, []),
-        [Paragraph(bs), ..acc],
+        [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
         ls,
       )
     OutsideBlock, [_, ..ls], _, _, _, [Match(_, [Some(exit)])] ->
@@ -126,7 +148,14 @@ fn do_parse_blocks(
     CodeBlockBuilder(_, info, full_info, bs), [_, ..ls], _, _, _, [Match(_, _)] ->
       do_parse_blocks(
         OutsideBlock,
-        [CodeBlock(info, full_info, ["", ..bs]), ..acc],
+        [
+          CodeBlock(
+            info,
+            full_info,
+            list.reverse(["", ..bs]) |> string.join("\n"),
+          ),
+          ..acc
+        ],
         ls,
       )
     CodeBlockBuilder(break, info, full_info, bs), [l, ..ls], _, _, _, _ ->
@@ -139,18 +168,26 @@ fn do_parse_blocks(
     ParagraphBuilder(bs), [_, ..ls], _, _, [Match(_, [Some("=")])], _ ->
       do_parse_blocks(
         OutsideBlock,
-        [Heading(1, Some(list.reverse(bs))), ..acc],
+        [Heading(1, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
         ls,
       )
     ParagraphBuilder(bs), [_, ..ls], _, _, [Match(_, [Some("-")])], _ ->
       do_parse_blocks(
         OutsideBlock,
-        [Heading(2, Some(list.reverse(bs))), ..acc],
+        [Heading(2, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
         ls,
       )
     // Horizontal breaks
     ParagraphBuilder(bs), [_, ..ls], True, _, _, _ ->
-      do_parse_blocks(OutsideBlock, [HorizontalBreak, Paragraph(bs), ..acc], ls)
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          HorizontalBreak,
+          Paragraph(list.reverse(bs) |> string.join("\n")),
+          ..acc
+        ],
+        ls,
+      )
     OutsideBlock, [_, ..ls], True, _, _, _ ->
       do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls)
     // ATX headers
@@ -169,13 +206,17 @@ fn do_parse_blocks(
     ->
       do_parse_blocks(
         OutsideBlock,
-        [Heading(string.length(heading), Some([contents])), ..acc],
+        [Heading(string.length(heading), Some(contents)), ..acc],
         ls,
       )
     ParagraphBuilder(bs), [_, ..ls], _, [Match(_, [Some(heading)])], _, _ ->
       do_parse_blocks(
         OutsideBlock,
-        [Heading(string.length(heading), None), Paragraph(bs), ..acc],
+        [
+          Heading(string.length(heading), None),
+          Paragraph(list.reverse(bs) |> string.join("\n")),
+          ..acc
+        ],
         ls,
       )
     ParagraphBuilder(bs),
@@ -188,8 +229,8 @@ fn do_parse_blocks(
       do_parse_blocks(
         OutsideBlock,
         [
-          Heading(string.length(heading), Some([contents])),
-          Paragraph(bs),
+          Heading(string.length(heading), Some(contents)),
+          Paragraph(list.reverse(bs) |> string.join("\n")),
           ..acc
         ],
         ls,
