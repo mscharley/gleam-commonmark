@@ -1,4 +1,5 @@
 import commonmark/ast
+import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
@@ -19,7 +20,10 @@ pub fn sanitize_plain_text(text: String) -> String {
   |> string.replace(">", "&gt;")
 }
 
-pub fn inline_to_html(inline: ast.InlineNode) -> String {
+pub fn inline_to_html(
+  inline: ast.InlineNode,
+  refs: Dict(String, ast.Reference),
+) -> String {
   case inline {
     ast.Text(contents) -> contents |> sanitize_plain_text
     ast.HardLineBreak -> "<br />\n"
@@ -36,15 +40,15 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
       "<code>" <> { contents |> sanitize_plain_text } <> "</code>"
     ast.Emphasis(contents, _) ->
       "<em>"
-      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
       <> "</em>"
     ast.StrongEmphasis(contents, _) ->
       "<strong>"
-      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
       <> "</strong>"
     ast.StrikeThrough(contents) ->
       "<s>"
-      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
       <> "</s>"
     ast.HtmlInline(html) -> html
     ast.Image(_, _) -> "Image"
@@ -56,7 +60,10 @@ pub fn inline_to_html(inline: ast.InlineNode) -> String {
   }
 }
 
-pub fn block_to_html(block: ast.BlockNode) -> String {
+pub fn block_to_html(
+  block: ast.BlockNode,
+  refs: Dict(String, ast.Reference),
+) -> String {
   case block {
     ast.CodeBlock(None, _, contents) ->
       "<pre><code>" <> { contents |> sanitize_plain_text } <> "</code></pre>\n"
@@ -70,19 +77,19 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
       "<h"
       <> int.to_string(level)
       <> ">"
-      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
       <> "</h"
       <> int.to_string(level)
       <> ">\n"
     ast.HorizontalBreak -> "<hr />\n"
     ast.Paragraph(contents) ->
       "<p>"
-      <> { contents |> list.map(inline_to_html) |> string.join("") }
+      <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
       <> "</p>\n"
     ast.HtmlBlock(html) -> html <> "\n"
     ast.BlockQuote(contents) ->
       "<blockquote>"
-      <> { contents |> list.map(block_to_html) |> string.join("") }
+      <> { contents |> list.map(block_to_html(_, refs)) |> string.join("") }
       <> "</blockquote>\n"
     ast.OrderedList(items, 1, _) ->
       "<ol>"
@@ -90,7 +97,9 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
         items
         |> list.map(fn(item) {
           "<li>"
-          <> { item.contents |> list.map(block_to_html) |> string.join("") }
+          <> {
+            item.contents |> list.map(block_to_html(_, refs)) |> string.join("")
+          }
           <> "</li>"
         })
         |> string.join("")
@@ -104,7 +113,9 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
         items
         |> list.map(fn(item) {
           "<li>"
-          <> { item.contents |> list.map(block_to_html) |> string.join("") }
+          <> {
+            item.contents |> list.map(block_to_html(_, refs)) |> string.join("")
+          }
           <> "</li>"
         })
         |> string.join("")
@@ -116,7 +127,9 @@ pub fn block_to_html(block: ast.BlockNode) -> String {
         items
         |> list.map(fn(item) {
           "<li>"
-          <> { item.contents |> list.map(block_to_html) |> string.join("") }
+          <> {
+            item.contents |> list.map(block_to_html(_, refs)) |> string.join("")
+          }
           <> "</li>"
         })
         |> string.join("")

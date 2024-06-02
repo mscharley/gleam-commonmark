@@ -29,7 +29,7 @@ pub fn parse(document: String) -> ast.Document {
 /// This version follows the advice in the CommonMark spec to silently resolve errors.
 pub fn to_html(document: ast.Document) -> String {
   document.blocks
-  |> list.map(html.block_to_html)
+  |> list.map(html.block_to_html(_, document.references))
   |> string.join("")
 }
 
@@ -38,7 +38,7 @@ pub fn to_html(document: ast.Document) -> String {
 /// This uses a more strict rendered that won't attempt to fix issues in the document.
 pub fn to_html_strict(document: ast.Document) -> Result(String, Nil) {
   document.blocks
-  |> list.map(html.block_to_html)
+  |> list.map(html.block_to_html(_, document.references))
   |> string.join("")
   |> Ok
 }
