@@ -2,7 +2,7 @@
 # https://gleam.run/writing-gleam/gleam-toml/.
 
 name = "commonmark"
-version = "0.1.2"
+version = "0.1.3"
 description = "CommonMark implementation for Gleam, for the BEAM or JS"
 licenses = ["MIT"]
 links = [
