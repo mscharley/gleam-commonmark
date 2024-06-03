@@ -1,5 +1,6 @@
 import commonmark
 import commonmark/ast
+import commonmark/internal/parser
 import gleam/dict
 import startest/expect
 
@@ -35,4 +36,28 @@ pub fn windows_test() {
     ],
     dict.new(),
   ))
+}
+
+pub fn trim_indent_short_test() {
+  "foo" |> parser.trim_indent(4) |> expect.to_equal("foo")
+}
+
+pub fn trim_indent_long_test() {
+  "      foo" |> parser.trim_indent(4) |> expect.to_equal("  foo")
+}
+
+pub fn trim_indent_tab1_test() {
+  "   \t foo" |> parser.trim_indent(4) |> expect.to_equal(" foo")
+}
+
+pub fn trim_indent_tab2_test() {
+  "  \t foo" |> parser.trim_indent(4) |> expect.to_equal(" foo")
+}
+
+pub fn trim_indent_tab3_test() {
+  " \t foo" |> parser.trim_indent(4) |> expect.to_equal(" foo")
+}
+
+pub fn trim_indent_tab4_test() {
+  "\t foo" |> parser.trim_indent(4) |> expect.to_equal(" foo")
 }

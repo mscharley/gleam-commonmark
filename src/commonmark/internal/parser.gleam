@@ -5,10 +5,19 @@ import gleam/regex.{Match}
 import gleam/result
 import gleam/string
 
+const tab_stop = "(?: {0,3}\t|    )"
+
 type BlockState {
   OutsideBlock
   ParagraphBuilder(List(String))
-  CodeBlockBuilder(String, Option(String), Option(String), List(String))
+  FencedCodeBlockBuilder(
+    String,
+    Option(String),
+    Option(String),
+    List(String),
+    Int,
+  )
+  IndentedCodeBlockBuilder(List(String))
 }
 
 type InlineState {
@@ -21,6 +30,32 @@ pub opaque type BlockParseState {
   HorizontalBreak
   Heading(Int, Option(String))
   CodeBlock(Option(String), Option(String), String)
+}
+
+fn do_trim_indent(line: String, n: Int, removed: Int) -> String {
+  case line {
+    _ if removed >= n -> line
+    " " <> rest -> do_trim_indent(rest, n, removed + 1)
+    "\t" <> rest -> {
+      let next_tab_stop = removed + { 4 - { removed % 4 } }
+      do_trim_indent(rest, n, removed + next_tab_stop)
+    }
+    _ -> line
+  }
+}
+
+/// Trims up to a certain amount of whitespace from the start of a string.
+///
+/// This respects tabs correctly with a tab width of 4 spaces.
+pub fn trim_indent(line: String, n: Int) -> String {
+  do_trim_indent(line, n, 0)
+}
+
+fn determine_indent(indent: Option(String)) -> Int {
+  case indent {
+    None -> 0
+    Some(s) -> string.length(s)
+  }
 }
 
 fn parse_autolink(href: String) -> ast.InlineNode {
@@ -128,10 +163,12 @@ fn do_parse_blocks(
   let assert Ok(setext_header_regex) =
     regex.from_string("^ {0,3}([-=])+[ \t]*$")
   let assert Ok(fenced_code_regex) = case state {
-    CodeBlockBuilder(break, _, _, _) ->
+    FencedCodeBlockBuilder(break, _, _, _, _) ->
       regex.from_string("^ {0,3}" <> break <> "+[ \t]*$")
-    _ -> regex.from_string("^ {0,3}([~`]{3,})[ \t]*(([^\\s]+).*?)?[ \t]*$")
+    _ -> regex.from_string("^( {0,3})([~`]{3,})[ \t]*(([^\\s]+).*?)?[ \t]*$")
   }
+  let assert Ok(valid_indented_code_regex) =
+    regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
   let l = list.first(lines) |> result.unwrap("")
 
   case
@@ -140,42 +177,111 @@ fn do_parse_blocks(
     regex.check(l, with: hr_regex),
     regex.scan(l, with: atx_header_regex),
     regex.scan(l, with: setext_header_regex),
-    regex.scan(l, with: fenced_code_regex)
+    regex.scan(l, with: fenced_code_regex),
+    regex.check(l, with: valid_indented_code_regex)
   {
     // Run out of lines...
-    ParagraphBuilder(lines), [], _, _, _, _ ->
+    ParagraphBuilder(lines), [], _, _, _, _, _ ->
       [Paragraph(lines |> string.join("\n")), ..acc] |> list.reverse
-    CodeBlockBuilder(_, info, full_info, contents), [""], _, _, _, _
-    | CodeBlockBuilder(_, info, full_info, contents), [], _, _, _, _
+    IndentedCodeBlockBuilder(lines), [], _, _, _, _, _ ->
+      [
+        CodeBlock(
+          None,
+          None,
+          [
+            "",
+            ..lines
+            |> list.map(trim_indent(_, 4))
+            |> list.drop_while(fn(n) { n == "" })
+          ]
+            |> list.reverse
+            |> list.drop_while(fn(n) { n == "" })
+            |> string.join("\n"),
+        ),
+        ..acc
+      ]
+      |> list.reverse
+    FencedCodeBlockBuilder(_, info, full_info, contents, indent),
+      [""],
+      _,
+      _,
+      _,
+      _,
+      _
+    | FencedCodeBlockBuilder(_, info, full_info, contents, indent),
+      [],
+      _,
+      _,
+      _,
+      _,
+      _
     ->
       [
         CodeBlock(
           info,
           full_info,
-          ["", ..contents] |> list.reverse |> string.join("\n"),
+          ["", ..contents]
+            |> list.map(trim_indent(_, indent))
+            |> list.reverse
+            |> string.join("\n"),
         ),
         ..acc
       ]
       |> list.reverse
-    OutsideBlock, [], _, _, _, _ -> acc |> list.reverse
+    OutsideBlock, [], _, _, _, _, _ -> acc |> list.reverse
     // Blank line ending a paragraph
-    ParagraphBuilder(bs), ["  ", ..ls], _, _, _, _
-    | ParagraphBuilder(bs), ["\\", ..ls], _, _, _, _
-    | ParagraphBuilder(bs), ["", ..ls], _, _, _, _
+    ParagraphBuilder(bs), ["  ", ..ls], _, _, _, _, _
+    | ParagraphBuilder(bs), ["\\", ..ls], _, _, _, _, _
+    | ParagraphBuilder(bs), ["", ..ls], _, _, _, _, _
     ->
       do_parse_blocks(
         OutsideBlock,
         [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
         ls,
       )
-    OutsideBlock, ["  ", ..ls], _, _, _, _
-    | OutsideBlock, ["\\", ..ls], _, _, _, _
-    | OutsideBlock, ["", ..ls], _, _, _, _
+    OutsideBlock, ["  ", ..ls], _, _, _, _, _
+    | OutsideBlock, ["\\", ..ls], _, _, _, _, _
+    | OutsideBlock, ["", ..ls], _, _, _, _, _
     -> do_parse_blocks(OutsideBlock, acc, ls)
-    // Fenced code blocks
-    ParagraphBuilder(bs), [_, ..ls], _, _, _, [Match(_, [Some(exit)])] ->
+    // Indented code blocks
+    OutsideBlock, [l, ..ls], _, _, _, _, True ->
+      do_parse_blocks(IndentedCodeBlockBuilder([l]), acc, ls)
+    IndentedCodeBlockBuilder(bs), [l], _, _, _, _, True ->
+      do_parse_blocks(IndentedCodeBlockBuilder([l, ..bs]), acc, [])
+    IndentedCodeBlockBuilder(bs), [l, ..ls], _, _, _, _, True ->
+      do_parse_blocks(IndentedCodeBlockBuilder([l, ..bs]), acc, ls)
+    IndentedCodeBlockBuilder(bs), ls, _, _, _, _, False ->
       do_parse_blocks(
-        CodeBlockBuilder(exit, None, None, []),
+        OutsideBlock,
+        [
+          CodeBlock(
+            None,
+            None,
+            [
+              "",
+              ..bs
+              |> list.map(trim_indent(_, 4))
+              |> list.drop_while(fn(n) { n == "" })
+            ]
+              |> list.reverse
+              |> list.drop_while(fn(n) { n == "" })
+              |> string.join("\n"),
+          ),
+          ..acc
+        ],
+        ls,
+      )
+    // Fenced code blocks
+    ParagraphBuilder(bs),
+      [_, ..ls],
+      _,
+      _,
+      _,
+      [Match(_, [indent, Some(exit)])],
+      _
+    ->
+      do_parse_blocks(
+        FencedCodeBlockBuilder(exit, None, None, [], determine_indent(indent)),
         [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
         ls,
       )
@@ -184,51 +290,94 @@ fn do_parse_blocks(
       _,
       _,
       _,
-      [Match(_, [Some(exit), full_info, info])]
+      [Match(_, [indent, Some(exit), full_info, info])],
+      _
     ->
       do_parse_blocks(
-        CodeBlockBuilder(exit, info, full_info, []),
+        FencedCodeBlockBuilder(
+          exit,
+          info,
+          full_info,
+          [],
+          determine_indent(indent),
+        ),
         [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
         ls,
       )
-    OutsideBlock, [_, ..ls], _, _, _, [Match(_, [Some(exit)])] ->
-      do_parse_blocks(CodeBlockBuilder(exit, None, None, []), acc, ls)
-    OutsideBlock, [_, ..ls], _, _, _, [Match(_, [Some(exit), full_info, info])] ->
-      do_parse_blocks(CodeBlockBuilder(exit, info, full_info, []), acc, ls)
-    CodeBlockBuilder(_, info, full_info, bs), [_, ..ls], _, _, _, [Match(_, _)] ->
+    OutsideBlock, [_, ..ls], _, _, _, [Match(_, [indent, Some(exit)])], _ ->
+      do_parse_blocks(
+        FencedCodeBlockBuilder(exit, None, None, [], determine_indent(indent)),
+        acc,
+        ls,
+      )
+    OutsideBlock,
+      [_, ..ls],
+      _,
+      _,
+      _,
+      [Match(_, [indent, Some(exit), full_info, info])],
+      _
+    ->
+      do_parse_blocks(
+        FencedCodeBlockBuilder(
+          exit,
+          info,
+          full_info,
+          [],
+          determine_indent(indent),
+        ),
+        acc,
+        ls,
+      )
+    FencedCodeBlockBuilder(_, info, full_info, bs, indent),
+      [_, ..ls],
+      _,
+      _,
+      _,
+      [Match(_, _)],
+      _
+    ->
       do_parse_blocks(
         OutsideBlock,
         [
           CodeBlock(
             info,
             full_info,
-            list.reverse(["", ..bs]) |> string.join("\n"),
+            list.reverse(["", ..bs |> list.map(trim_indent(_, indent))])
+              |> string.join("\n"),
           ),
           ..acc
         ],
         ls,
       )
-    CodeBlockBuilder(break, info, full_info, bs), [l, ..ls], _, _, _, _ ->
+    FencedCodeBlockBuilder(break, info, full_info, bs, indent),
+      [l, ..ls],
+      _,
+      _,
+      _,
+      _,
+      _
+    ->
       do_parse_blocks(
-        CodeBlockBuilder(break, info, full_info, [l, ..bs]),
+        FencedCodeBlockBuilder(break, info, full_info, [l, ..bs], indent),
         acc,
         ls,
       )
     // Setext headers
-    ParagraphBuilder(bs), [_, ..ls], _, _, [Match(_, [Some("=")])], _ ->
+    ParagraphBuilder(bs), [_, ..ls], _, _, [Match(_, [Some("=")])], _, _ ->
       do_parse_blocks(
         OutsideBlock,
         [Heading(1, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
         ls,
       )
-    ParagraphBuilder(bs), [_, ..ls], _, _, [Match(_, [Some("-")])], _ ->
+    ParagraphBuilder(bs), [_, ..ls], _, _, [Match(_, [Some("-")])], _, _ ->
       do_parse_blocks(
         OutsideBlock,
         [Heading(2, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
         ls,
       )
     // Horizontal breaks
-    ParagraphBuilder(bs), [_, ..ls], True, _, _, _ ->
+    ParagraphBuilder(bs), [_, ..ls], True, _, _, _, _ ->
       do_parse_blocks(
         OutsideBlock,
         [
@@ -238,10 +387,10 @@ fn do_parse_blocks(
         ],
         ls,
       )
-    OutsideBlock, [_, ..ls], True, _, _, _ ->
+    OutsideBlock, [_, ..ls], True, _, _, _, _ ->
       do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls)
     // ATX headers
-    OutsideBlock, [_, ..ls], _, [Match(_, [Some(heading)])], _, _ ->
+    OutsideBlock, [_, ..ls], _, [Match(_, [Some(heading)])], _, _, _ ->
       do_parse_blocks(
         OutsideBlock,
         [Heading(string.length(heading), None), ..acc],
@@ -252,6 +401,7 @@ fn do_parse_blocks(
       _,
       [Match(_, [Some(heading), Some(contents)])],
       _,
+      _,
       _
     ->
       do_parse_blocks(
@@ -259,7 +409,7 @@ fn do_parse_blocks(
         [Heading(string.length(heading), Some(contents)), ..acc],
         ls,
       )
-    ParagraphBuilder(bs), [_, ..ls], _, [Match(_, [Some(heading)])], _, _ ->
+    ParagraphBuilder(bs), [_, ..ls], _, [Match(_, [Some(heading)])], _, _, _ ->
       do_parse_blocks(
         OutsideBlock,
         [
@@ -274,6 +424,7 @@ fn do_parse_blocks(
       _,
       [Match(_, [Some(heading), Some(contents)])],
       _,
+      _,
       _
     ->
       do_parse_blocks(
@@ -286,9 +437,9 @@ fn do_parse_blocks(
         ls,
       )
     // Paragraphs
-    OutsideBlock, [line, ..ls], _, _, _, _ ->
+    OutsideBlock, [line, ..ls], _, _, _, _, _ ->
       do_parse_blocks(ParagraphBuilder([line]), acc, ls)
-    ParagraphBuilder(bs), [line, ..ls], _, _, _, _ ->
+    ParagraphBuilder(bs), [line, ..ls], _, _, _, _, _ ->
       do_parse_blocks(ParagraphBuilder([line, ..bs]), acc, ls)
   }
 }

@@ -30,8 +30,14 @@ pub type InlineNode {
   UriAutolink(href: String)
   EmailAutolink(href: String)
   HtmlInline(html: String)
-  /// Text content shouldn't contain line breaks. See HardLineBreak and SoftLineBreak for the
-  /// canonical representation of line breaks that renderers can make decisions about.
+  /// Literal text content that should be rendered as-is. In particular, this means that the
+  /// content is not HTML-safe, nor is any other precaution taken for specific renderers. Renderers
+  /// should take appropriate precautions to make sure that this text is displayed as presented.
+  ///
+  /// Text content shouldn't normally contain line breaks. See `HardLineBreak` and `SoftLineBreak`
+  /// for the canonical representation of line breaks that renderers can make decisions about. The
+  /// exception is `CodeBlock(Text(""))` which may contain line breaks (standardised to `"\n"`) as
+  /// the full block of text inside the `CodeBlock` is returned as a single pre-formatted text blob.
   Text(contents: String)
   HardLineBreak
   SoftLineBreak

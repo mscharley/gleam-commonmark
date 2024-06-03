@@ -41,8 +41,8 @@ The current version of CommonMark targetted is [0.31.2][commonmark].
 * ✅ Thematic breaks
 * ✅ ATX headings
 * ✅ Setext headings
-* ❌ Indented code blocks
-* 🚧 Fenced code blocks
+* ✅ Indented code blocks
+* ✅ Fenced code blocks
 * ❌ Link reference definitions
 * ✅ Paragraphs
 * ❌ Block quotes
