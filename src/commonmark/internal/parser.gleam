@@ -149,6 +149,19 @@ pub fn parse_block_state(state: BlockParseState) -> List(ast.BlockNode) {
   }
 }
 
+/// Apply a regex that should match the full line and hence should only ever have a single match.
+///
+/// Returns the list of submatches only.
+fn apply_regex(
+  line: String,
+  with regex: regex.Regex,
+) -> Result(List(Option(String)), Nil) {
+  case regex.scan(line, with: regex) {
+    [Match(_, submatches)] -> Ok(submatches)
+    _ -> Error(Nil)
+  }
+}
+
 fn do_parse_blocks(
   state: BlockState,
   acc: List(BlockParseState),
@@ -172,11 +185,11 @@ fn do_parse_blocks(
   let l = list.first(lines)
 
   let atx_header_results =
-    l |> result.map(regex.scan(_, with: atx_header_regex))
+    l |> result.try(apply_regex(_, with: atx_header_regex))
   let setext_header_results =
-    l |> result.map(regex.scan(_, with: setext_header_regex))
+    l |> result.try(apply_regex(_, with: setext_header_regex))
   let fenced_code_results =
-    l |> result.map(regex.scan(_, with: fenced_code_regex))
+    l |> result.try(apply_regex(_, with: fenced_code_regex))
 
   let is_hr =
     l |> result.map(regex.check(_, with: hr_regex)) |> result.unwrap(False)
@@ -186,15 +199,15 @@ fn do_parse_blocks(
     |> result.unwrap(False)
   let is_atx_header =
     atx_header_results
-    |> result.map(fn(x) { list.length(x) > 0 })
+    |> result.map(fn(_) { True })
     |> result.unwrap(False)
   let is_setext_header =
     setext_header_results
-    |> result.map(fn(x) { list.length(x) > 0 })
+    |> result.map(fn(_) { True })
     |> result.unwrap(False)
   let is_fenced_code_block =
     fenced_code_results
-    |> result.map(fn(x) { list.length(x) > 0 })
+    |> result.map(fn(_) { True })
     |> result.unwrap(False)
 
   case state, lines {
@@ -280,7 +293,7 @@ fn do_parse_blocks(
     // Fenced code blocks
     ParagraphBuilder(bs), [_, ..ls] if is_fenced_code_block ->
       case fenced_code_results {
-        Ok([Match(_, [indent, Some(exit)])]) ->
+        Ok([indent, Some(exit)]) ->
           do_parse_blocks(
             FencedCodeBlockBuilder(
               exit,
@@ -292,7 +305,7 @@ fn do_parse_blocks(
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
           )
-        Ok([Match(_, [indent, Some(exit), full_info, info])]) ->
+        Ok([indent, Some(exit), full_info, info]) ->
           do_parse_blocks(
             FencedCodeBlockBuilder(
               exit,
@@ -312,7 +325,7 @@ fn do_parse_blocks(
       }
     OutsideBlock, [_, ..ls] if is_fenced_code_block ->
       case fenced_code_results {
-        Ok([Match(_, [indent, Some(exit)])]) ->
+        Ok([indent, Some(exit)]) ->
           do_parse_blocks(
             FencedCodeBlockBuilder(
               exit,
@@ -324,7 +337,7 @@ fn do_parse_blocks(
             acc,
             ls,
           )
-        Ok([Match(_, [indent, Some(exit), full_info, info])]) ->
+        Ok([indent, Some(exit), full_info, info]) ->
           do_parse_blocks(
             FencedCodeBlockBuilder(
               exit,
@@ -345,27 +358,19 @@ fn do_parse_blocks(
     FencedCodeBlockBuilder(_, info, full_info, bs, indent), [_, ..ls]
       if is_fenced_code_block
     ->
-      case fenced_code_results {
-        Ok([Match(_, _)]) ->
-          do_parse_blocks(
-            OutsideBlock,
-            [
-              CodeBlock(
-                info,
-                full_info,
-                list.reverse(["", ..bs |> list.map(trim_indent(_, indent))])
-                  |> string.join("\n"),
-              ),
-              ..acc
-            ],
-            ls,
-          )
-        _ ->
-          panic as {
-            "Invalid fenced code block parser state: "
-            <> string.inspect(fenced_code_results)
-          }
-      }
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          CodeBlock(
+            info,
+            full_info,
+            list.reverse(["", ..bs |> list.map(trim_indent(_, indent))])
+              |> string.join("\n"),
+          ),
+          ..acc
+        ],
+        ls,
+      )
     FencedCodeBlockBuilder(break, info, full_info, bs, indent), [l, ..ls] ->
       do_parse_blocks(
         FencedCodeBlockBuilder(break, info, full_info, [l, ..bs], indent),
@@ -375,13 +380,13 @@ fn do_parse_blocks(
     // Setext headers
     ParagraphBuilder(bs), [_, ..ls] if is_setext_header ->
       case setext_header_results {
-        Ok([Match(_, [Some("=")])]) ->
+        Ok([Some("=")]) ->
           do_parse_blocks(
             OutsideBlock,
             [Heading(1, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
             ls,
           )
-        Ok([Match(_, [Some("-")])]) ->
+        Ok([Some("-")]) ->
           do_parse_blocks(
             OutsideBlock,
             [Heading(2, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
@@ -409,13 +414,13 @@ fn do_parse_blocks(
     // ATX headers
     OutsideBlock, [_, ..ls] if is_atx_header ->
       case atx_header_results {
-        Ok([Match(_, [Some(heading)])]) ->
+        Ok([Some(heading)]) ->
           do_parse_blocks(
             OutsideBlock,
             [Heading(string.length(heading), None), ..acc],
             ls,
           )
-        Ok([Match(_, [Some(heading), Some(contents)])]) ->
+        Ok([Some(heading), Some(contents)]) ->
           do_parse_blocks(
             OutsideBlock,
             [Heading(string.length(heading), Some(contents)), ..acc],
@@ -429,7 +434,7 @@ fn do_parse_blocks(
       }
     ParagraphBuilder(bs), [_, ..ls] if is_atx_header ->
       case atx_header_results {
-        Ok([Match(_, [Some(heading)])]) ->
+        Ok([Some(heading)]) ->
           do_parse_blocks(
             OutsideBlock,
             [
@@ -439,7 +444,7 @@ fn do_parse_blocks(
             ],
             ls,
           )
-        Ok([Match(_, [Some(heading), Some(contents)])]) ->
+        Ok([Some(heading), Some(contents)]) ->
           do_parse_blocks(
             OutsideBlock,
             [
