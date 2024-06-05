@@ -45,7 +45,7 @@ The current version of CommonMark targetted is [0.31.2][commonmark].
 * ✅ Fenced code blocks
 * ❌ Link reference definitions
 * ✅ Paragraphs
-* ❌ Block quotes
+* ✅ Block quotes
 * ❌ Ordered lists
 * ❌ Unordered lists
 * ❌ Code spans

@@ -88,7 +88,7 @@ pub fn block_to_html(
       <> "</p>\n"
     ast.HtmlBlock(html) -> html <> "\n"
     ast.BlockQuote(contents) ->
-      "<blockquote>"
+      "<blockquote>\n"
       <> { contents |> list.map(block_to_html(_, refs)) |> string.join("") }
       <> "</blockquote>\n"
     ast.OrderedList(items, 1, _) ->

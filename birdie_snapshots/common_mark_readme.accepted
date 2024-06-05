@@ -75,7 +75,7 @@ This is a test."
       SoftLineBreak,
       Text("* ✅ Paragraphs"),
       SoftLineBreak,
-      Text("* ❌ Block quotes"),
+      Text("* ✅ Block quotes"),
       SoftLineBreak,
       Text("* ❌ Ordered lists"),
       SoftLineBreak,

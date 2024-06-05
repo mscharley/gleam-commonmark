@@ -18,6 +18,7 @@ type BlockState {
     Int,
   )
   IndentedCodeBlockBuilder(List(String))
+  BlockQuoteBuilder(List(String))
 }
 
 type InlineState {
@@ -30,6 +31,7 @@ pub opaque type BlockParseState {
   HorizontalBreak
   Heading(Int, Option(String))
   CodeBlock(Option(String), Option(String), String)
+  BlockQuote(List(BlockParseState))
 }
 
 fn do_trim_indent(line: String, n: Int, removed: Int) -> String {
@@ -139,13 +141,14 @@ pub fn parse_text(text: String) -> List(ast.InlineNode) {
   text |> string.to_graphemes |> do_parse_text(TextAccumulator([]), [])
 }
 
-pub fn parse_block_state(state: BlockParseState) -> List(ast.BlockNode) {
+pub fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
   case state {
-    Paragraph(lines) -> [lines |> parse_text |> ast.Paragraph]
-    CodeBlock(info, full_info, lines) -> [ast.CodeBlock(info, full_info, lines)]
-    HorizontalBreak -> [ast.HorizontalBreak]
-    Heading(level, Some(contents)) -> [ast.Heading(level, parse_text(contents))]
-    Heading(level, None) -> [ast.Heading(level, [])]
+    Paragraph(lines) -> lines |> parse_text |> ast.Paragraph
+    CodeBlock(info, full_info, lines) -> ast.CodeBlock(info, full_info, lines)
+    HorizontalBreak -> ast.HorizontalBreak
+    Heading(level, Some(contents)) -> ast.Heading(level, parse_text(contents))
+    Heading(level, None) -> ast.Heading(level, [])
+    BlockQuote(blocks) -> ast.BlockQuote(blocks |> list.map(parse_block_state))
   }
 }
 
@@ -182,14 +185,17 @@ fn do_parse_blocks(
   }
   let assert Ok(valid_indented_code_regex) =
     regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
-  let l = list.first(lines)
+  let assert Ok(block_quote_regex) = regex.from_string("^ {0,3}> ?(.*)$")
 
+  let l = list.first(lines)
   let atx_header_results =
     l |> result.try(apply_regex(_, with: atx_header_regex))
   let setext_header_results =
     l |> result.try(apply_regex(_, with: setext_header_regex))
   let fenced_code_results =
     l |> result.try(apply_regex(_, with: fenced_code_regex))
+  let block_quote_results =
+    l |> result.try(apply_regex(_, with: block_quote_regex))
 
   let is_hr =
     l |> result.map(regex.check(_, with: hr_regex)) |> result.unwrap(False)
@@ -209,11 +215,27 @@ fn do_parse_blocks(
     fenced_code_results
     |> result.map(fn(_) { True })
     |> result.unwrap(False)
+  let is_block_quote =
+    block_quote_results
+    |> result.map(fn(_) { True })
+    |> result.unwrap(False)
+  let is_paragraph =
+    !is_hr
+    && !is_atx_header
+    && !is_setext_header
+    && !is_fenced_code_block
+    && !is_block_quote
+  let is_blank_line =
+    l
+    |> result.map(trim_indent(_, 4))
+    |> result.map(fn(x) { x == "" })
+    |> result.unwrap(False)
 
   case state, lines {
     // Run out of lines...
     ParagraphBuilder(lines), [] ->
-      [Paragraph(lines |> string.join("\n")), ..acc] |> list.reverse
+      [Paragraph(lines |> list.reverse |> string.join("\n")), ..acc]
+      |> list.reverse
     IndentedCodeBlockBuilder(lines), [] ->
       [
         CodeBlock(
@@ -247,11 +269,17 @@ fn do_parse_blocks(
         ..acc
       ]
       |> list.reverse
+    BlockQuoteBuilder(bs), [] -> [
+      BlockQuote(bs |> list.reverse |> parse_blocks),
+      ..acc
+    ]
     OutsideBlock, [] -> acc |> list.reverse
     // Blank line ending a paragraph
     ParagraphBuilder(bs), ["  ", ..ls]
     | ParagraphBuilder(bs), ["\\", ..ls]
     | ParagraphBuilder(bs), ["", ..ls]
+    | ParagraphBuilder(bs), [_, ..ls]
+      if is_blank_line
     ->
       do_parse_blocks(
         OutsideBlock,
@@ -264,7 +292,10 @@ fn do_parse_blocks(
     -> do_parse_blocks(OutsideBlock, acc, ls)
     // Indented code blocks
     OutsideBlock, [l, ..ls] if is_indented_code_block ->
-      do_parse_blocks(IndentedCodeBlockBuilder([l]), acc, ls)
+      case is_blank_line {
+        True -> do_parse_blocks(OutsideBlock, acc, ls)
+        False -> do_parse_blocks(IndentedCodeBlockBuilder([l]), acc, ls)
+      }
     IndentedCodeBlockBuilder(bs), [l] if is_indented_code_block ->
       do_parse_blocks(IndentedCodeBlockBuilder([l, ..bs]), acc, [])
     IndentedCodeBlockBuilder(bs), [l, ..ls] if is_indented_code_block ->
@@ -411,6 +442,64 @@ fn do_parse_blocks(
       )
     OutsideBlock, [_, ..ls] if is_hr ->
       do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls)
+    // Block quotes
+    BlockQuoteBuilder(bs), [_, ..ls] if is_block_quote ->
+      case block_quote_results {
+        Ok([None]) | Ok([]) ->
+          do_parse_blocks(BlockQuoteBuilder(["", ..bs]), acc, ls)
+        Ok([Some(l)]) -> do_parse_blocks(BlockQuoteBuilder([l, ..bs]), acc, ls)
+        _ ->
+          panic as {
+            "Invalid block quote parser state: "
+            <> string.inspect(block_quote_results)
+          }
+      }
+    BlockQuoteBuilder(bs), [l, ..ls] ->
+      case
+        bs
+        |> list.reverse
+        |> parse_blocks
+        |> list.last
+      {
+        Ok(Paragraph(_)) | Ok(BlockQuote(_)) if is_paragraph && !is_blank_line ->
+          do_parse_blocks(BlockQuoteBuilder([l, ..bs]), acc, ls)
+        _ ->
+          do_parse_blocks(
+            OutsideBlock,
+            [BlockQuote(bs |> list.reverse |> parse_blocks), ..acc],
+            [l, ..ls],
+          )
+      }
+    ParagraphBuilder(bs), [_, ..ls] if is_block_quote ->
+      case block_quote_results {
+        Ok([None]) | Ok([]) ->
+          do_parse_blocks(
+            BlockQuoteBuilder([""]),
+            [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
+            ls,
+          )
+        Ok([Some(l)]) ->
+          do_parse_blocks(
+            BlockQuoteBuilder([l]),
+            [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid block quote parser state: "
+            <> string.inspect(block_quote_results)
+          }
+      }
+    OutsideBlock, [_, ..ls] if is_block_quote ->
+      case block_quote_results {
+        Ok([None]) | Ok([]) -> do_parse_blocks(BlockQuoteBuilder([""]), acc, ls)
+        Ok([Some(l)]) -> do_parse_blocks(BlockQuoteBuilder([l]), acc, ls)
+        _ ->
+          panic as {
+            "Invalid block quote parser state: "
+            <> string.inspect(block_quote_results)
+          }
+      }
     // ATX headers
     OutsideBlock, [_, ..ls] if is_atx_header ->
       case atx_header_results {
