@@ -2,3 +2,4 @@ gleam 1.2.1
 erlang 27.0
 rebar 3.23.0
 nodejs 20.13.1
+elixir 1.17.0-rc.1-otp-27
