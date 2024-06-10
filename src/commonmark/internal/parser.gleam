@@ -21,6 +21,13 @@ type BlockState {
   IndentedCodeBlockBuilder(List(String))
   BlockQuoteBuilder(List(String))
   UnorderedListBuilder(List(String), List(List(BlockParseState)), String, Int)
+  OrderedListBuilder(
+    List(String),
+    List(List(BlockParseState)),
+    String,
+    Int,
+    Int,
+  )
 }
 
 type InlineState {
@@ -35,6 +42,7 @@ pub opaque type BlockParseState {
   CodeBlock(Option(String), Option(String), String)
   BlockQuote(List(BlockParseState))
   UnorderedList(List(List(BlockParseState)), ast.UnorderedListMarker)
+  OrderedList(List(List(BlockParseState)), ast.OrderedListMarker)
 }
 
 fn ol_marker(marker: String) -> ast.OrderedListMarker {
@@ -181,6 +189,21 @@ pub fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
       let tight = True
 
       ast.UnorderedList(
+        items
+          |> list.map(list.map(_, parse_block_state(_)))
+          |> list.map(fn(l) {
+            case tight {
+              True -> ast.TightListItem(l)
+              False -> ast.ListItem(l)
+            }
+          }),
+        marker,
+      )
+    }
+    OrderedList(items, marker, start) -> {
+      let tight = True
+
+      ast.OrderedList(
         items
           |> list.map(list.map(_, parse_block_state(_)))
           |> list.map(fn(l) {
