@@ -88,8 +88,12 @@ pub type Reference {
   Reference(href: String, title: Option(String))
 }
 
+/// A dictionary of references keyed by the name of the reference
+pub type ReferenceList =
+  Dict(String, Reference)
+
 /// Documents contain all the information necessary to render a document, both structural and
 /// metadata.
 pub type Document {
-  Document(blocks: List(BlockNode), references: Dict(String, Reference))
+  Document(blocks: List(BlockNode), references: ReferenceList)
 }

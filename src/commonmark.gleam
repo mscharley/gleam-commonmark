@@ -5,8 +5,7 @@
 
 import commonmark/ast
 import commonmark/internal/html
-import commonmark/internal/parser
-import gleam/dict
+import commonmark/internal/parser/block.{parse_document}
 import gleam/list
 import gleam/regex
 import gleam/string
@@ -19,9 +18,7 @@ pub fn parse(document: String) -> ast.Document {
   // Security check [SPEC 2.3]
   |> string.replace("\u{0000}", "\u{FFFD}")
   |> regex.split(with: line_splitter)
-  |> parser.parse_blocks
-  |> list.map(parser.parse_block_state)
-  |> ast.Document(dict.new())
+  |> parse_document
 }
 
 /// Render an AST into a HTML string.

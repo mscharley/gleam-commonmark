@@ -1,12 +1,15 @@
 import commonmark/ast
+import commonmark/internal/parser/helpers.{
+  determine_indent, indent_pattern, ol_marker, tab_stop, trim_indent, ul_marker,
+}
+import commonmark/internal/parser/inline.{parse_text}
+import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/regex.{Match}
 import gleam/result
 import gleam/string
-
-const tab_stop = "(?: {0,3}\t|    )"
 
 type BlockState {
   OutsideBlock
@@ -30,154 +33,17 @@ type BlockState {
   )
 }
 
-type InlineState {
-  TextAccumulator(List(String))
-  AutolinkAccumulator(List(String))
-}
-
-pub opaque type BlockParseState {
+type BlockParseState {
   Paragraph(String)
   HorizontalBreak
   Heading(Int, Option(String))
   CodeBlock(Option(String), Option(String), String)
   BlockQuote(List(BlockParseState))
   UnorderedList(List(List(BlockParseState)), ast.UnorderedListMarker)
-  OrderedList(List(List(BlockParseState)), ast.OrderedListMarker)
+  OrderedList(List(List(BlockParseState)), Int, ast.OrderedListMarker)
 }
 
-fn ol_marker(marker: String) -> ast.OrderedListMarker {
-  case marker {
-    "." -> ast.PeriodListMarker
-    ")" -> ast.BracketListMarker
-    _ -> panic as { "Invalid ordered list marker: " <> marker }
-  }
-}
-
-fn ul_marker(marker: String) -> ast.UnorderedListMarker {
-  case marker {
-    "*" -> ast.AsteriskListMarker
-    "-" -> ast.DashListMarker
-    "+" -> ast.PlusListMarker
-    _ -> panic as { "Invalid unordered list marker: " <> marker }
-  }
-}
-
-fn do_trim_indent(line: String, n: Int, removed: Int) -> String {
-  case line {
-    _ if removed >= n -> line
-    " " <> rest -> do_trim_indent(rest, n, removed + 1)
-    "\t" <> rest -> {
-      let next_tab_stop = removed + { 4 - { removed % 4 } }
-      do_trim_indent(rest, n, removed + next_tab_stop)
-    }
-    _ -> line
-  }
-}
-
-fn indent_pattern(indent: Int) -> String {
-  case indent {
-    0 -> ""
-    i if i >= 4 -> tab_stop <> indent_pattern(i - 4)
-    i -> " {" <> int.to_string(i) <> "}"
-  }
-}
-
-/// Trims up to a certain amount of whitespace from the start of a string.
-///
-/// This respects tabs correctly with a tab width of 4 spaces.
-pub fn trim_indent(line: String, n: Int) -> String {
-  do_trim_indent(line, n, 0)
-}
-
-fn determine_indent(indent: Option(String)) -> Int {
-  case indent {
-    None -> 0
-    Some(s) -> string.length(s)
-  }
-}
-
-fn parse_autolink(href: String) -> ast.InlineNode {
-  // Borrowed direct from the spec
-  let assert Ok(email_regex) =
-    regex.from_string(
-      "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
-    )
-  let assert Ok(uri_regex) = regex.from_string("^[a-zA-Z][-a-zA-Z+.]{1,31}:")
-
-  case regex.check(email_regex, href), regex.check(uri_regex, href) {
-    True, _ -> ast.EmailAutolink(href)
-    _, True -> ast.UriAutolink(href)
-    False, False -> ast.Text("<" <> href <> ">")
-  }
-}
-
-fn do_parse_text(
-  text: List(String),
-  state: InlineState,
-  acc: List(ast.InlineNode),
-) -> List(ast.InlineNode) {
-  case state, text {
-    AutolinkAccumulator(ts), [] -> [
-      ast.Text(["<", ..list.reverse(ts)] |> string.join("")),
-      ..acc
-    ]
-    TextAccumulator(ts), [] ->
-      [ast.Text(ts |> list.reverse |> string.join("") |> string.trim), ..acc]
-      |> list.reverse
-    TextAccumulator(ts), [" ", " ", "\n", ..gs]
-    | TextAccumulator(ts), ["\\", "\n", ..gs]
-    ->
-      do_parse_text(gs, TextAccumulator([]), [
-        ast.HardLineBreak,
-        ast.Text(ts |> list.reverse |> string.join("") |> string.trim),
-        ..acc
-      ])
-    AutolinkAccumulator(ts), [" ", " ", "\n", ..gs]
-    | AutolinkAccumulator(ts), ["\\", "\n", ..gs]
-    ->
-      do_parse_text(gs, TextAccumulator([]), [
-        ast.HardLineBreak,
-        ast.Text(list.reverse(["<", ..ts]) |> string.join("")),
-        ..acc
-      ])
-    TextAccumulator(ts), ["\n", ..gs] ->
-      do_parse_text(gs, TextAccumulator([]), [
-        ast.SoftLineBreak,
-        ast.Text(ts |> list.reverse |> string.join("") |> string.trim),
-        ..acc
-      ])
-    AutolinkAccumulator(ts), ["\n", ..gs] ->
-      do_parse_text(gs, TextAccumulator([]), [
-        ast.SoftLineBreak,
-        ast.Text(list.reverse(["<", ..ts]) |> string.join("")),
-        ..acc
-      ])
-    TextAccumulator(ts), ["<", ..gs] ->
-      do_parse_text(gs, AutolinkAccumulator([]), [
-        ast.Text(ts |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    AutolinkAccumulator(ts), ["\t" as space, ..gs]
-    | AutolinkAccumulator(ts), [" " as space, ..gs]
-    ->
-      do_parse_text(gs, TextAccumulator([space, ..list.append(ts, ["<"])]), acc)
-    AutolinkAccumulator(ts), [">", ..gs] ->
-      do_parse_text(gs, TextAccumulator([]), [
-        parse_autolink(ts |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    AutolinkAccumulator(ts), [g, ..gs] ->
-      do_parse_text(gs, AutolinkAccumulator([g, ..ts]), acc)
-    TextAccumulator(ts), [g, ..gs] ->
-      do_parse_text(gs, TextAccumulator([g, ..ts]), acc)
-  }
-}
-
-pub fn parse_text(text: String) -> List(ast.InlineNode) {
-  text |> string.to_graphemes |> do_parse_text(TextAccumulator([]), [])
-}
-
-pub fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
+fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
   case state {
     Paragraph(lines) -> lines |> parse_text |> ast.Paragraph
     CodeBlock(info, full_info, lines) -> ast.CodeBlock(info, full_info, lines)
@@ -200,7 +66,7 @@ pub fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
         marker,
       )
     }
-    OrderedList(items, marker, start) -> {
+    OrderedList(items, start, marker) -> {
       let tight = True
 
       ast.OrderedList(
@@ -212,6 +78,7 @@ pub fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
               False -> ast.ListItem(l)
             }
           }),
+        start,
         marker,
       )
     }
@@ -254,6 +121,8 @@ fn do_parse_blocks(
   let assert Ok(block_quote_regex) = regex.from_string("^ {0,3}> ?(.*)$")
   let assert Ok(ul_regex) =
     regex.from_string("^([ ]{0,3})([-*+])(?:([ ]{1,4})(.*))?$")
+  let assert Ok(ol_regex) =
+    regex.from_string("^([ ]{0,3})([0-9]{1,9})([.)])(?:([ ]{1,4})(.*))?$")
 
   let l = list.first(lines)
   let atx_header_results =
@@ -265,6 +134,7 @@ fn do_parse_blocks(
   let block_quote_results =
     l |> result.try(apply_regex(_, with: block_quote_regex))
   let ul_results = l |> result.try(apply_regex(_, with: ul_regex))
+  let ol_results = l |> result.try(apply_regex(_, with: ul_regex))
 
   let is_hr =
     l |> result.map(regex.check(_, with: hr_regex)) |> result.unwrap(False)
@@ -274,21 +144,18 @@ fn do_parse_blocks(
     |> result.unwrap(False)
   let is_atx_header =
     atx_header_results
-    |> result.map(fn(_) { True })
-    |> result.unwrap(False)
+    |> result.is_ok
   let is_setext_header =
     setext_header_results
-    |> result.map(fn(_) { True })
-    |> result.unwrap(False)
+    |> result.is_ok
   let is_fenced_code_block =
     fenced_code_results
-    |> result.map(fn(_) { True })
-    |> result.unwrap(False)
+    |> result.is_ok
   let is_block_quote =
     block_quote_results
-    |> result.map(fn(_) { True })
-    |> result.unwrap(False)
-  let is_ul = ul_results |> result.map(fn(_) { True }) |> result.unwrap(False)
+    |> result.is_ok
+  let is_ul = ul_results |> result.is_ok
+  let is_ol = ul_results |> result.is_ok
   let is_list_continuation = case state {
     UnorderedListBuilder(_, _, _, indent) -> {
       let assert Ok(indent_pattern) =
@@ -306,6 +173,7 @@ fn do_parse_blocks(
     && !is_fenced_code_block
     && !is_block_quote
     && !is_ul
+    && !is_ol
   let is_blank_line =
     l
     |> result.map(trim_indent(_, 4))
@@ -358,6 +226,14 @@ fn do_parse_blocks(
       UnorderedList(
         [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
         ul_marker(marker),
+      ),
+      ..acc
+    ]
+    OrderedListBuilder(item, items, marker, start, _), [] -> [
+      OrderedList(
+        [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+        start,
+        ol_marker(marker),
       ),
       ..acc
     ]
@@ -646,6 +522,128 @@ fn do_parse_blocks(
             <> string.inspect(ul_results)
           }
       }
+    // Ordered lists
+    OrderedListBuilder(item, list, marker, start, _), [_, ..ls] if is_ol ->
+      case ol_results {
+        Ok([leading, _, Some(new_marker)]) if marker == new_marker ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [],
+              [item |> list.reverse |> parse_blocks, ..list],
+              marker,
+              start,
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, _, Some(new_marker), Some(new_indent), rest])
+          if marker == new_marker
+        ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [rest |> option.unwrap("")],
+              [item |> list.reverse |> parse_blocks, ..list],
+              marker,
+              start,
+              string.length(new_indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(new_start), Some(new_marker)]) ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [],
+              [],
+              new_marker,
+              new_start |> int.parse |> result.unwrap(1),
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            [OrderedList(list |> list.reverse, start, ol_marker(marker)), ..acc],
+            ls,
+          )
+        Ok([leading, Some(new_start), Some(new_marker), Some(new_indent), rest]) ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [rest |> option.unwrap("")],
+              [],
+              new_marker,
+              new_start |> int.parse |> result.unwrap(1),
+              string.length(new_indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            [OrderedList(list |> list.reverse, start, ol_marker(marker)), ..acc],
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid ordered list parser state: " <> string.inspect(ol_results)
+          }
+      }
+    OrderedListBuilder(item, list, marker, start, indent), [l, ..ls]
+      if is_list_continuation
+    ->
+      do_parse_blocks(
+        OrderedListBuilder(
+          [trim_indent(l, indent), ..item],
+          list,
+          marker,
+          start,
+          indent,
+        ),
+        acc,
+        ls,
+      )
+    OrderedListBuilder(item, list, marker, start, _), ls ->
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          OrderedList(
+            [item |> list.reverse |> parse_blocks, ..list] |> list.reverse,
+            start,
+            ol_marker(marker),
+          ),
+          ..acc
+        ],
+        ls,
+      )
+    OutsideBlock, [_, ..ls] if is_ul ->
+      case ol_results {
+        Ok([leading, Some(start), Some(marker)]) ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [],
+              [],
+              marker,
+              start |> int.parse |> result.unwrap(1),
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(start), Some(marker), Some(indent), rest]) ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [rest |> option.unwrap("")],
+              [],
+              marker,
+              start |> int.parse |> result.unwrap(1),
+              string.length(indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid ordered list parser state: " <> string.inspect(ol_results)
+          }
+      }
     // Block quotes
     BlockQuoteBuilder(bs), [_, ..ls] if is_block_quote ->
       case block_quote_results {
@@ -761,6 +759,12 @@ fn do_parse_blocks(
   }
 }
 
-pub fn parse_blocks(lines: List(String)) -> List(BlockParseState) {
+fn parse_blocks(lines: List(String)) -> List(BlockParseState) {
   do_parse_blocks(OutsideBlock, [], lines)
+}
+
+pub fn parse_document(lines: List(String)) -> ast.Document {
+  parse_blocks(lines)
+  |> list.map(parse_block_state)
+  |> ast.Document(dict.new())
 }
