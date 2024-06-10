@@ -60,49 +60,110 @@ This is a test."
     Paragraph([
       Text("The current version of CommonMark targetted is [0.31.2][commonmark]."),
     ]),
-    Paragraph([
-      Text("* ✅ Thematic breaks"),
-      SoftLineBreak,
-      Text("* ✅ ATX headings"),
-      SoftLineBreak,
-      Text("* ✅ Setext headings"),
-      SoftLineBreak,
-      Text("* ✅ Indented code blocks"),
-      SoftLineBreak,
-      Text("* ✅ Fenced code blocks"),
-      SoftLineBreak,
-      Text("* ❌ Link reference definitions"),
-      SoftLineBreak,
-      Text("* ✅ Paragraphs"),
-      SoftLineBreak,
-      Text("* ✅ Block quotes"),
-      SoftLineBreak,
-      Text("* ❌ Ordered lists"),
-      SoftLineBreak,
-      Text("* ❌ Unordered lists"),
-      SoftLineBreak,
-      Text("* ❌ Code spans"),
-      SoftLineBreak,
-      Text("* ❌ Emphasis and strong emphasis"),
-      SoftLineBreak,
-      Text("* ❌ Links"),
-      SoftLineBreak,
-      Text("* ❌ Images"),
-      SoftLineBreak,
-      Text("* ✅ Autolinks"),
-      SoftLineBreak,
-      Text("* ✅ Hard line breaks"),
-      SoftLineBreak,
-      Text("* ✅ Soft line breaks"),
-    ]),
+    UnorderedList(
+      [
+        TightListItem([
+          Paragraph([
+            Text("✅ Thematic breaks"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ ATX headings"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ Setext headings"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ Indented code blocks"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ Fenced code blocks"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("❌ Link reference definitions"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ Paragraphs"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ Block quotes"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("❌ Ordered lists"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("❌ Unordered lists"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("❌ Code spans"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("❌ Emphasis and strong emphasis"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([Text("❌ Links")]),
+        ]),
+        TightListItem([
+          Paragraph([Text("❌ Images")]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ Autolinks"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ Hard line breaks"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("✅ Soft line breaks"),
+          ]),
+        ]),
+      ],
+      AsteriskListMarker,
+    ),
     Paragraph([
       Text("Raw HTML features will be tackled last as the potential security issues around this need to be considered."),
     ]),
-    Paragraph([
-      Text("* ❌ HTML blocks"),
-      SoftLineBreak,
-      Text("* ❌ Inline HTML"),
-    ]),
+    UnorderedList(
+      [
+        TightListItem([
+          Paragraph([
+            Text("❌ HTML blocks"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("❌ Inline HTML"),
+          ]),
+        ]),
+      ],
+      AsteriskListMarker,
+    ),
     Paragraph([
       Text("[commonmark]: https://spec.commonmark.org/0.31.2/"),
     ]),
@@ -115,11 +176,19 @@ This is a test."
     Paragraph([
       Text("The current version of GFM targetted is [0.29-gfm][gfm]."),
     ]),
-    Paragraph([
-      Text("* ❌ Tables"),
-      SoftLineBreak,
-      Text("* ❌ Strikethrough"),
-    ]),
+    UnorderedList(
+      [
+        TightListItem([
+          Paragraph([Text("❌ Tables")]),
+        ]),
+        TightListItem([
+          Paragraph([
+            Text("❌ Strikethrough"),
+          ]),
+        ]),
+      ],
+      AsteriskListMarker,
+    ),
     Paragraph([
       Text("[gfm]: https://github.github.com/gfm/"),
     ]),

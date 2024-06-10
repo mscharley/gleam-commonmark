@@ -1,4 +1,5 @@
 import commonmark/ast
+import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/regex.{Match}
@@ -19,6 +20,7 @@ type BlockState {
   )
   IndentedCodeBlockBuilder(List(String))
   BlockQuoteBuilder(List(String))
+  UnorderedListBuilder(List(String), List(List(BlockParseState)), String, Int)
 }
 
 type InlineState {
@@ -32,6 +34,24 @@ pub opaque type BlockParseState {
   Heading(Int, Option(String))
   CodeBlock(Option(String), Option(String), String)
   BlockQuote(List(BlockParseState))
+  UnorderedList(List(List(BlockParseState)), ast.UnorderedListMarker)
+}
+
+fn ol_marker(marker: String) -> ast.OrderedListMarker {
+  case marker {
+    "." -> ast.PeriodListMarker
+    ")" -> ast.BracketListMarker
+    _ -> panic as { "Invalid ordered list marker: " <> marker }
+  }
+}
+
+fn ul_marker(marker: String) -> ast.UnorderedListMarker {
+  case marker {
+    "*" -> ast.AsteriskListMarker
+    "-" -> ast.DashListMarker
+    "+" -> ast.PlusListMarker
+    _ -> panic as { "Invalid unordered list marker: " <> marker }
+  }
 }
 
 fn do_trim_indent(line: String, n: Int, removed: Int) -> String {
@@ -43,6 +63,14 @@ fn do_trim_indent(line: String, n: Int, removed: Int) -> String {
       do_trim_indent(rest, n, removed + next_tab_stop)
     }
     _ -> line
+  }
+}
+
+fn indent_pattern(indent: Int) -> String {
+  case indent {
+    0 -> ""
+    i if i >= 4 -> tab_stop <> indent_pattern(i - 4)
+    i -> " {" <> int.to_string(i) <> "}"
   }
 }
 
@@ -149,6 +177,21 @@ pub fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
     Heading(level, Some(contents)) -> ast.Heading(level, parse_text(contents))
     Heading(level, None) -> ast.Heading(level, [])
     BlockQuote(blocks) -> ast.BlockQuote(blocks |> list.map(parse_block_state))
+    UnorderedList(items, marker) -> {
+      let tight = True
+
+      ast.UnorderedList(
+        items
+          |> list.map(list.map(_, parse_block_state(_)))
+          |> list.map(fn(l) {
+            case tight {
+              True -> ast.TightListItem(l)
+              False -> ast.ListItem(l)
+            }
+          }),
+        marker,
+      )
+    }
   }
 }
 
@@ -186,6 +229,8 @@ fn do_parse_blocks(
   let assert Ok(valid_indented_code_regex) =
     regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
   let assert Ok(block_quote_regex) = regex.from_string("^ {0,3}> ?(.*)$")
+  let assert Ok(ul_regex) =
+    regex.from_string("^([ ]{0,3})([-*+])(?:([ ]{1,4})(.*))?$")
 
   let l = list.first(lines)
   let atx_header_results =
@@ -196,6 +241,7 @@ fn do_parse_blocks(
     l |> result.try(apply_regex(_, with: fenced_code_regex))
   let block_quote_results =
     l |> result.try(apply_regex(_, with: block_quote_regex))
+  let ul_results = l |> result.try(apply_regex(_, with: ul_regex))
 
   let is_hr =
     l |> result.map(regex.check(_, with: hr_regex)) |> result.unwrap(False)
@@ -219,12 +265,24 @@ fn do_parse_blocks(
     block_quote_results
     |> result.map(fn(_) { True })
     |> result.unwrap(False)
+  let is_ul = ul_results |> result.map(fn(_) { True }) |> result.unwrap(False)
+  let is_list_continuation = case state {
+    UnorderedListBuilder(_, _, _, indent) -> {
+      let assert Ok(indent_pattern) =
+        regex.from_string("^" <> indent_pattern(indent) <> "|^[ \t]*$")
+
+      l |> result.try(apply_regex(_, with: indent_pattern)) |> result.is_ok
+    }
+    _ -> False
+  }
+
   let is_paragraph =
     !is_hr
     && !is_atx_header
     && !is_setext_header
     && !is_fenced_code_block
     && !is_block_quote
+    && !is_ul
   let is_blank_line =
     l
     |> result.map(trim_indent(_, 4))
@@ -271,6 +329,13 @@ fn do_parse_blocks(
       |> list.reverse
     BlockQuoteBuilder(bs), [] -> [
       BlockQuote(bs |> list.reverse |> parse_blocks),
+      ..acc
+    ]
+    UnorderedListBuilder(item, items, marker, _), [] -> [
+      UnorderedList(
+        [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+        ul_marker(marker),
+      ),
       ..acc
     ]
     OutsideBlock, [] -> acc |> list.reverse
@@ -442,6 +507,122 @@ fn do_parse_blocks(
       )
     OutsideBlock, [_, ..ls] if is_hr ->
       do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls)
+    // Unordered lists
+    UnorderedListBuilder(item, list, marker, _), [_, ..ls] if is_ul ->
+      case ul_results {
+        Ok([leading, Some(new_marker)]) if marker == new_marker ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [],
+              [item |> list.reverse |> parse_blocks, ..list],
+              marker,
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(new_marker), Some(new_indent), rest])
+          if marker == new_marker
+        ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [rest |> option.unwrap("")],
+              [item |> list.reverse |> parse_blocks, ..list],
+              marker,
+              string.length(new_indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(new_marker)]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [],
+              [],
+              new_marker,
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            [UnorderedList(list |> list.reverse, ul_marker(marker)), ..acc],
+            ls,
+          )
+        Ok([leading, Some(new_marker), Some(new_indent), rest]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [rest |> option.unwrap("")],
+              [],
+              new_marker,
+              string.length(new_indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            [UnorderedList(list |> list.reverse, ul_marker(marker)), ..acc],
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid unordered list parser state: "
+            <> string.inspect(ul_results)
+          }
+      }
+    UnorderedListBuilder(item, list, marker, indent), [l, ..ls]
+      if is_list_continuation
+    ->
+      do_parse_blocks(
+        UnorderedListBuilder(
+          [trim_indent(l, indent), ..item],
+          list,
+          marker,
+          indent,
+        ),
+        acc,
+        ls,
+      )
+    UnorderedListBuilder(item, list, marker, _), ls ->
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          UnorderedList(
+            [item |> list.reverse |> parse_blocks, ..list] |> list.reverse,
+            ul_marker(marker),
+          ),
+          ..acc
+        ],
+        ls,
+      )
+    OutsideBlock, [_, ..ls] if is_ul ->
+      case ul_results {
+        Ok([leading, Some(marker)]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [],
+              [],
+              marker,
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(marker), Some(indent), rest]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [rest |> option.unwrap("")],
+              [],
+              marker,
+              string.length(indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid unordered list parser state: "
+            <> string.inspect(ul_results)
+          }
+      }
     // Block quotes
     BlockQuoteBuilder(bs), [_, ..ls] if is_block_quote ->
       case block_quote_results {

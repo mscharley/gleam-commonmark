@@ -60,9 +60,30 @@ pub fn inline_to_html(
   }
 }
 
+fn list_item_to_html(
+  item: ast.ListItem,
+  refs: Dict(String, ast.Reference),
+) -> String {
+  case item {
+    ast.ListItem(contents) ->
+      "<li>\n"
+      <> {
+        contents |> list.map(block_to_html(_, refs, False)) |> string.join("")
+      }
+      <> "</li>\n"
+    ast.TightListItem(contents) ->
+      "<li>"
+      <> {
+        contents |> list.map(block_to_html(_, refs, True)) |> string.join("")
+      }
+      <> "</li>\n"
+  }
+}
+
 pub fn block_to_html(
   block: ast.BlockNode,
   refs: Dict(String, ast.Reference),
+  tight: Bool,
 ) -> String {
   case block {
     ast.CodeBlock(None, _, contents) ->
@@ -82,6 +103,8 @@ pub fn block_to_html(
       <> int.to_string(level)
       <> ">\n"
     ast.HorizontalBreak -> "<hr />\n"
+    ast.Paragraph(contents) if tight ->
+      contents |> list.map(inline_to_html(_, refs)) |> string.join("")
     ast.Paragraph(contents) ->
       "<p>"
       <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
@@ -89,51 +112,35 @@ pub fn block_to_html(
     ast.HtmlBlock(html) -> html <> "\n"
     ast.BlockQuote(contents) ->
       "<blockquote>\n"
-      <> { contents |> list.map(block_to_html(_, refs)) |> string.join("") }
+      <> {
+        contents |> list.map(block_to_html(_, refs, False)) |> string.join("")
+      }
       <> "</blockquote>\n"
     ast.OrderedList(items, 1, _) ->
-      "<ol>"
+      "<ol>\n"
       <> {
         items
-        |> list.map(fn(item) {
-          "<li>"
-          <> {
-            item.contents |> list.map(block_to_html(_, refs)) |> string.join("")
-          }
-          <> "</li>"
-        })
+        |> list.map(list_item_to_html(_, refs))
         |> string.join("")
       }
-      <> "</ol>/n"
+      <> "</ol>\n"
     ast.OrderedList(items, start, _) ->
       "<ol start=\""
       <> int.to_string(start)
-      <> "\">"
+      <> "\">\n"
       <> {
         items
-        |> list.map(fn(item) {
-          "<li>"
-          <> {
-            item.contents |> list.map(block_to_html(_, refs)) |> string.join("")
-          }
-          <> "</li>"
-        })
+        |> list.map(list_item_to_html(_, refs))
         |> string.join("")
       }
-      <> "</ol>/n"
+      <> "</ol>\n"
     ast.UnorderedList(items, _) ->
-      "<ul>"
+      "<ul>\n"
       <> {
         items
-        |> list.map(fn(item) {
-          "<li>"
-          <> {
-            item.contents |> list.map(block_to_html(_, refs)) |> string.join("")
-          }
-          <> "</li>"
-        })
+        |> list.map(list_item_to_html(_, refs))
         |> string.join("")
       }
-      <> "</ul>/n"
+      <> "</ul>\n"
   }
 }

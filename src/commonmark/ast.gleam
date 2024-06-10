@@ -52,6 +52,7 @@ pub type InlineNode {
 
 pub type ListItem {
   ListItem(contents: List(BlockNode))
+  TightListItem(contents: List(BlockNode))
 }
 
 pub type OrderedListMarker {
