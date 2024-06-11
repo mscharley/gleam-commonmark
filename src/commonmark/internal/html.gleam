@@ -72,12 +72,31 @@ fn list_item_to_html(
         contents |> list.map(block_to_html(_, refs, False)) |> string.join("")
       }
       <> "</li>\n"
-    ast.TightListItem(contents) ->
-      "<li>"
-      <> {
-        contents |> list.map(block_to_html(_, refs, True)) |> string.join("\n")
+    ast.TightListItem(contents) -> {
+      let r = contents |> list.reverse
+      let rest =
+        r
+        |> list.drop(1)
+        |> list.map(fn(b) {
+          case b {
+            ast.Paragraph(c) ->
+              block_to_html(
+                ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])),
+                refs,
+                True,
+              )
+            _ -> block_to_html(b, refs, True)
+          }
+        })
+        |> list.reverse
+        |> string.join("")
+      let last = case list.first(r) {
+        Ok(block) -> block_to_html(block, refs, True)
+        Error(_) -> ""
       }
-      <> "</li>\n"
+
+      "<li>" <> rest <> last <> "</li>\n"
+    }
   }
 }
 
