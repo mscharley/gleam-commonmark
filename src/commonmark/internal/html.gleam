@@ -65,6 +65,7 @@ fn list_item_to_html(
   refs: Dict(String, ast.Reference),
 ) -> String {
   case item {
+    ast.ListItem([]) | ast.TightListItem([]) -> "<li></li>\n"
     ast.ListItem(contents) ->
       "<li>\n"
       <> {
