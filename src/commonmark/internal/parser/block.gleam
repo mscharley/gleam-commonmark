@@ -294,6 +294,333 @@ fn do_parse_blocks(
     | OutsideBlock, ["\\", ..ls]
     | OutsideBlock, ["", ..ls]
     -> do_parse_blocks(OutsideBlock, acc, ls)
+    // Setext headers
+    ParagraphBuilder(bs), [_, ..ls] if is_setext_header ->
+      case setext_header_results {
+        Ok([Some("=")]) ->
+          do_parse_blocks(
+            OutsideBlock,
+            [Heading(1, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
+            ls,
+          )
+        Ok([Some("-")]) ->
+          do_parse_blocks(
+            OutsideBlock,
+            [Heading(2, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid Setext header parser state: "
+            <> string.inspect(setext_header_results)
+          }
+      }
+    // Horizontal breaks
+    ParagraphBuilder(bs), [_, ..ls] if is_hr ->
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          HorizontalBreak,
+          Paragraph(list.reverse(bs) |> string.join("\n")),
+          ..acc
+        ],
+        ls,
+      )
+    OutsideBlock, [_, ..ls] if is_hr ->
+      do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls)
+    // Unordered lists
+    UnorderedListBuilder(item, items, tight, marker, indent), [l, ..ls]
+      if is_list_continuation
+    ->
+      do_parse_blocks(
+        UnorderedListBuilder(
+          [trim_indent(l, indent), ..item],
+          items,
+          tight,
+          marker,
+          indent,
+        ),
+        acc,
+        ls,
+      )
+    UnorderedListBuilder(item, items, tight, marker, _), [_, ..ls] if is_ul ->
+      case ul_results {
+        Ok([leading, Some(new_marker)]) if marker == new_marker ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [],
+              [item |> list.reverse |> parse_blocks, ..items],
+              tight && !list.any(item, is_empty_line),
+              marker,
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(new_marker), Some(new_indent), rest])
+          if marker == new_marker
+        ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [rest |> option.unwrap("")],
+              [item |> list.reverse |> parse_blocks, ..items],
+              tight && !list.any(item, is_empty_line),
+              marker,
+              string.length(new_indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(new_marker)]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [],
+              [],
+              True,
+              new_marker,
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            [
+              UnorderedList(
+                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+                tight && !list.any(list.drop(item, 1), is_empty_line),
+                ul_marker(marker),
+              ),
+              ..acc
+            ],
+            ls,
+          )
+        Ok([leading, Some(new_marker), Some(new_indent), rest]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [rest |> option.unwrap("")],
+              [],
+              True,
+              new_marker,
+              string.length(new_indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            [
+              UnorderedList(
+                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+                tight && !list.any(list.drop(item, 1), is_empty_line),
+                ul_marker(marker),
+              ),
+              ..acc
+            ],
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid unordered list parser state: "
+            <> string.inspect(ul_results)
+          }
+      }
+    UnorderedListBuilder(item, items, tight, marker, _), ls ->
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          UnorderedList(
+            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+            tight && !list.any(list.drop(item, 1), is_empty_line),
+            ul_marker(marker),
+          ),
+          ..acc
+        ],
+        ls,
+      )
+    OutsideBlock, [_, ..ls] if is_ul ->
+      case ul_results {
+        Ok([leading, Some(marker)]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [],
+              [],
+              True,
+              marker,
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(marker), Some(indent), rest]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [rest |> option.unwrap("")],
+              [],
+              True,
+              marker,
+              string.length(indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid unordered list parser state: "
+            <> string.inspect(ul_results)
+          }
+      }
+    // Ordered lists
+    OrderedListBuilder(item, items, tight, marker, start, indent), [l, ..ls]
+      if is_list_continuation
+    ->
+      do_parse_blocks(
+        OrderedListBuilder(
+          [trim_indent(l, indent), ..item],
+          items,
+          tight,
+          marker,
+          start,
+          indent,
+        ),
+        acc,
+        ls,
+      )
+    OrderedListBuilder(item, items, tight, marker, start, _), [_, ..ls]
+      if is_ol
+    ->
+      case ol_results {
+        Ok([leading, _, Some(new_marker)]) if marker == new_marker ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [],
+              [item |> list.reverse |> parse_blocks, ..items],
+              tight && !list.any(item, is_empty_line),
+              marker,
+              start,
+              { option.unwrap(leading, "") |> string.length } + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(new_start), Some(new_marker), Some(new_indent), rest])
+          if marker == new_marker
+        ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [rest |> option.unwrap("")],
+              [item |> list.reverse |> parse_blocks, ..items],
+              tight && !list.any(item, is_empty_line),
+              marker,
+              start,
+              string.length(new_indent)
+                + string.length(new_start)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(new_start), Some(new_marker)]) ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [],
+              [],
+              True,
+              new_marker,
+              new_start |> int.parse |> result.unwrap(1),
+              string.length(new_start)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            [
+              OrderedList(
+                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+                start,
+                tight && !list.any(list.drop(item, 1), is_empty_line),
+                ol_marker(marker),
+              ),
+              ..acc
+            ],
+            ls,
+          )
+        Ok([leading, Some(new_start), Some(new_marker), Some(new_indent), rest]) ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [rest |> option.unwrap("")],
+              [],
+              True,
+              new_marker,
+              new_start |> int.parse |> result.unwrap(1),
+              string.length(new_indent)
+                + string.length(new_start)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            [
+              OrderedList(
+                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+                start,
+                tight && !list.any(list.drop(item, 1), is_empty_line),
+                ol_marker(marker),
+              ),
+              ..acc
+            ],
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid ordered list parser state: " <> string.inspect(ol_results)
+          }
+      }
+    OrderedListBuilder(item, items, tight, marker, start, _), ls ->
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          OrderedList(
+            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+            start,
+            tight && !list.any(list.drop(item, 1), is_empty_line),
+            ol_marker(marker),
+          ),
+          ..acc
+        ],
+        ls,
+      )
+    OutsideBlock, [_, ..ls] if is_ol ->
+      case ol_results {
+        Ok([leading, Some(start), Some(marker)]) ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [],
+              [],
+              True,
+              marker,
+              start |> int.parse |> result.unwrap(1),
+              string.length(start)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        Ok([leading, Some(start), Some(marker), Some(indent), rest]) ->
+          do_parse_blocks(
+            OrderedListBuilder(
+              [rest |> option.unwrap("")],
+              [],
+              rest |> option.is_some,
+              marker,
+              start |> int.parse |> result.unwrap(1),
+              string.length(indent)
+                + string.length(start)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+          )
+        _ ->
+          panic as {
+            "Invalid ordered list parser state: " <> string.inspect(ol_results)
+          }
+      }
     // Indented code blocks
     OutsideBlock, [l, ..ls] if is_indented_code_block ->
       case is_blank_line {
@@ -412,333 +739,6 @@ fn do_parse_blocks(
         acc,
         ls,
       )
-    // Setext headers
-    ParagraphBuilder(bs), [_, ..ls] if is_setext_header ->
-      case setext_header_results {
-        Ok([Some("=")]) ->
-          do_parse_blocks(
-            OutsideBlock,
-            [Heading(1, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
-            ls,
-          )
-        Ok([Some("-")]) ->
-          do_parse_blocks(
-            OutsideBlock,
-            [Heading(2, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
-            ls,
-          )
-        _ ->
-          panic as {
-            "Invalid Setext header parser state: "
-            <> string.inspect(setext_header_results)
-          }
-      }
-    // Horizontal breaks
-    ParagraphBuilder(bs), [_, ..ls] if is_hr ->
-      do_parse_blocks(
-        OutsideBlock,
-        [
-          HorizontalBreak,
-          Paragraph(list.reverse(bs) |> string.join("\n")),
-          ..acc
-        ],
-        ls,
-      )
-    OutsideBlock, [_, ..ls] if is_hr ->
-      do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls)
-    // Unordered lists
-    UnorderedListBuilder(item, items, tight, marker, _), [_, ..ls] if is_ul ->
-      case ul_results {
-        Ok([leading, Some(new_marker)]) if marker == new_marker ->
-          do_parse_blocks(
-            UnorderedListBuilder(
-              [],
-              [item |> list.reverse |> parse_blocks, ..items],
-              tight && !list.any(item, is_empty_line),
-              marker,
-              { option.unwrap(leading, "") |> string.length } + 1,
-            ),
-            acc,
-            ls,
-          )
-        Ok([leading, Some(new_marker), Some(new_indent), rest])
-          if marker == new_marker
-        ->
-          do_parse_blocks(
-            UnorderedListBuilder(
-              [rest |> option.unwrap("")],
-              [item |> list.reverse |> parse_blocks, ..items],
-              tight && !list.any(item, is_empty_line),
-              marker,
-              string.length(new_indent)
-                + { option.unwrap(leading, "") |> string.length }
-                + 1,
-            ),
-            acc,
-            ls,
-          )
-        Ok([leading, Some(new_marker)]) ->
-          do_parse_blocks(
-            UnorderedListBuilder(
-              [],
-              [],
-              True,
-              new_marker,
-              { option.unwrap(leading, "") |> string.length } + 1,
-            ),
-            [
-              UnorderedList(
-                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
-                tight && !list.any(list.drop(item, 1), is_empty_line),
-                ul_marker(marker),
-              ),
-              ..acc
-            ],
-            ls,
-          )
-        Ok([leading, Some(new_marker), Some(new_indent), rest]) ->
-          do_parse_blocks(
-            UnorderedListBuilder(
-              [rest |> option.unwrap("")],
-              [],
-              True,
-              new_marker,
-              string.length(new_indent)
-                + { option.unwrap(leading, "") |> string.length }
-                + 1,
-            ),
-            [
-              UnorderedList(
-                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
-                tight && !list.any(list.drop(item, 1), is_empty_line),
-                ul_marker(marker),
-              ),
-              ..acc
-            ],
-            ls,
-          )
-        _ ->
-          panic as {
-            "Invalid unordered list parser state: "
-            <> string.inspect(ul_results)
-          }
-      }
-    UnorderedListBuilder(item, items, tight, marker, indent), [l, ..ls]
-      if is_list_continuation
-    ->
-      do_parse_blocks(
-        UnorderedListBuilder(
-          [trim_indent(l, indent), ..item],
-          items,
-          tight,
-          marker,
-          indent,
-        ),
-        acc,
-        ls,
-      )
-    UnorderedListBuilder(item, items, tight, marker, _), ls ->
-      do_parse_blocks(
-        OutsideBlock,
-        [
-          UnorderedList(
-            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
-            tight && !list.any(list.drop(item, 1), is_empty_line),
-            ul_marker(marker),
-          ),
-          ..acc
-        ],
-        ls,
-      )
-    OutsideBlock, [_, ..ls] if is_ul ->
-      case ul_results {
-        Ok([leading, Some(marker)]) ->
-          do_parse_blocks(
-            UnorderedListBuilder(
-              [],
-              [],
-              True,
-              marker,
-              { option.unwrap(leading, "") |> string.length } + 1,
-            ),
-            acc,
-            ls,
-          )
-        Ok([leading, Some(marker), Some(indent), rest]) ->
-          do_parse_blocks(
-            UnorderedListBuilder(
-              [rest |> option.unwrap("")],
-              [],
-              True,
-              marker,
-              string.length(indent)
-                + { option.unwrap(leading, "") |> string.length }
-                + 1,
-            ),
-            acc,
-            ls,
-          )
-        _ ->
-          panic as {
-            "Invalid unordered list parser state: "
-            <> string.inspect(ul_results)
-          }
-      }
-    // Ordered lists
-    OrderedListBuilder(item, items, tight, marker, start, _), [_, ..ls]
-      if is_ol
-    ->
-      case ol_results {
-        Ok([leading, _, Some(new_marker)]) if marker == new_marker ->
-          do_parse_blocks(
-            OrderedListBuilder(
-              [],
-              [item |> list.reverse |> parse_blocks, ..items],
-              tight && !list.any(item, is_empty_line),
-              marker,
-              start,
-              { option.unwrap(leading, "") |> string.length } + 1,
-            ),
-            acc,
-            ls,
-          )
-        Ok([leading, Some(new_start), Some(new_marker), Some(new_indent), rest])
-          if marker == new_marker
-        ->
-          do_parse_blocks(
-            OrderedListBuilder(
-              [rest |> option.unwrap("")],
-              [item |> list.reverse |> parse_blocks, ..items],
-              tight && !list.any(item, is_empty_line),
-              marker,
-              start,
-              string.length(new_indent)
-                + string.length(new_start)
-                + { option.unwrap(leading, "") |> string.length }
-                + 1,
-            ),
-            acc,
-            ls,
-          )
-        Ok([leading, Some(new_start), Some(new_marker)]) ->
-          do_parse_blocks(
-            OrderedListBuilder(
-              [],
-              [],
-              True,
-              new_marker,
-              new_start |> int.parse |> result.unwrap(1),
-              string.length(new_start)
-                + { option.unwrap(leading, "") |> string.length }
-                + 1,
-            ),
-            [
-              OrderedList(
-                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
-                start,
-                tight && !list.any(list.drop(item, 1), is_empty_line),
-                ol_marker(marker),
-              ),
-              ..acc
-            ],
-            ls,
-          )
-        Ok([leading, Some(new_start), Some(new_marker), Some(new_indent), rest]) ->
-          do_parse_blocks(
-            OrderedListBuilder(
-              [rest |> option.unwrap("")],
-              [],
-              True,
-              new_marker,
-              new_start |> int.parse |> result.unwrap(1),
-              string.length(new_indent)
-                + string.length(new_start)
-                + { option.unwrap(leading, "") |> string.length }
-                + 1,
-            ),
-            [
-              OrderedList(
-                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
-                start,
-                tight && !list.any(list.drop(item, 1), is_empty_line),
-                ol_marker(marker),
-              ),
-              ..acc
-            ],
-            ls,
-          )
-        _ ->
-          panic as {
-            "Invalid ordered list parser state: " <> string.inspect(ol_results)
-          }
-      }
-    OrderedListBuilder(item, items, tight, marker, start, indent), [l, ..ls]
-      if is_list_continuation
-    ->
-      do_parse_blocks(
-        OrderedListBuilder(
-          [trim_indent(l, indent), ..item],
-          items,
-          tight,
-          marker,
-          start,
-          indent,
-        ),
-        acc,
-        ls,
-      )
-    OrderedListBuilder(item, items, tight, marker, start, _), ls ->
-      do_parse_blocks(
-        OutsideBlock,
-        [
-          OrderedList(
-            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
-            start,
-            tight && !list.any(list.drop(item, 1), is_empty_line),
-            ol_marker(marker),
-          ),
-          ..acc
-        ],
-        ls,
-      )
-    OutsideBlock, [_, ..ls] if is_ol ->
-      case ol_results {
-        Ok([leading, Some(start), Some(marker)]) ->
-          do_parse_blocks(
-            OrderedListBuilder(
-              [],
-              [],
-              True,
-              marker,
-              start |> int.parse |> result.unwrap(1),
-              string.length(start)
-                + { option.unwrap(leading, "") |> string.length }
-                + 1,
-            ),
-            acc,
-            ls,
-          )
-        Ok([leading, Some(start), Some(marker), Some(indent), rest]) ->
-          do_parse_blocks(
-            OrderedListBuilder(
-              [rest |> option.unwrap("")],
-              [],
-              rest |> option.is_some,
-              marker,
-              start |> int.parse |> result.unwrap(1),
-              string.length(indent)
-                + string.length(start)
-                + { option.unwrap(leading, "") |> string.length }
-                + 1,
-            ),
-            acc,
-            ls,
-          )
-        _ ->
-          panic as {
-            "Invalid ordered list parser state: " <> string.inspect(ol_results)
-          }
-      }
     // Block quotes
     BlockQuoteBuilder(bs), [_, ..ls] if is_block_quote ->
       case block_quote_results {

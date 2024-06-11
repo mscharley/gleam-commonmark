@@ -75,7 +75,7 @@ fn list_item_to_html(
     ast.TightListItem(contents) ->
       "<li>"
       <> {
-        contents |> list.map(block_to_html(_, refs, True)) |> string.join("")
+        contents |> list.map(block_to_html(_, refs, True)) |> string.join("\n")
       }
       <> "</li>\n"
   }
