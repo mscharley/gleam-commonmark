@@ -149,9 +149,9 @@ fn do_parse_blocks(
     regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
   let assert Ok(block_quote_regex) = regex.from_string("^ {0,3}> ?(.*)$")
   let assert Ok(ul_regex) =
-    regex.from_string("^([ ]{0,3})([-*+])(?:([ ]{1,4})(.*))?$")
+    regex.from_string("^( {0,3})([-*+])(?:( {1,4})(.*))?$")
   let assert Ok(ol_regex) =
-    regex.from_string("^([ ]{0,3})([0-9]{1,9})([.)])(?:([ ]{1,4})(.*))?$")
+    regex.from_string("^( {0,3})([0-9]{1,9})([.)])(?:( {1,4})(.*))?$")
 
   let l = list.first(lines)
   let atx_header_results =
@@ -184,7 +184,7 @@ fn do_parse_blocks(
     block_quote_results
     |> result.is_ok
   let is_ul = ul_results |> result.is_ok
-  let is_ol = ul_results |> result.is_ok
+  let is_ol = ol_results |> result.is_ok
   let is_list_continuation = case state {
     UnorderedListBuilder(_, _, _, indent) -> {
       let assert Ok(indent_pattern) =
@@ -640,7 +640,7 @@ fn do_parse_blocks(
         ],
         ls,
       )
-    OutsideBlock, [_, ..ls] if is_ul ->
+    OutsideBlock, [_, ..ls] if is_ol ->
       case ol_results {
         Ok([leading, Some(start), Some(marker)]) ->
           do_parse_blocks(
