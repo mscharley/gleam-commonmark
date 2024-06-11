@@ -7,6 +7,7 @@ import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/pair
 import gleam/regex.{Match}
 import gleam/result
 import gleam/string
@@ -43,43 +44,71 @@ type BlockParseState {
   OrderedList(List(List(BlockParseState)), Int, ast.OrderedListMarker)
 }
 
-fn parse_block_state(state: BlockParseState) -> ast.BlockNode {
+fn merge_references(refs: List(ast.ReferenceList)) -> ast.ReferenceList {
+  refs |> list.reduce(dict.merge) |> result.unwrap(dict.new())
+}
+
+fn parse_block_state(
+  state: BlockParseState,
+) -> #(ast.BlockNode, ast.ReferenceList) {
   case state {
-    Paragraph(lines) -> lines |> parse_text |> ast.Paragraph
-    CodeBlock(info, full_info, lines) -> ast.CodeBlock(info, full_info, lines)
-    HorizontalBreak -> ast.HorizontalBreak
-    Heading(level, Some(contents)) -> ast.Heading(level, parse_text(contents))
-    Heading(level, None) -> ast.Heading(level, [])
-    BlockQuote(blocks) -> ast.BlockQuote(blocks |> list.map(parse_block_state))
+    Paragraph(lines) -> #(lines |> parse_text |> ast.Paragraph, dict.new())
+    CodeBlock(info, full_info, lines) -> #(
+      ast.CodeBlock(info, full_info, lines),
+      dict.new(),
+    )
+    HorizontalBreak -> #(ast.HorizontalBreak, dict.new())
+    Heading(level, Some(contents)) -> #(
+      ast.Heading(level, parse_text(contents)),
+      dict.new(),
+    )
+    Heading(level, None) -> #(ast.Heading(level, []), dict.new())
+    BlockQuote(blocks) -> {
+      blocks
+      |> list.map(parse_block_state)
+      |> list.unzip
+      |> pair.map_first(ast.BlockQuote)
+      |> pair.map_second(merge_references)
+    }
     UnorderedList(items, marker) -> {
       let tight = True
-
-      ast.UnorderedList(
+      let xs =
         items
-          |> list.map(list.map(_, parse_block_state(_)))
-          |> list.map(fn(l) {
+        |> list.map(list.map(_, parse_block_state(_)))
+        |> list.map(list.unzip)
+
+      #(
+        ast.UnorderedList(
+          list.map(xs, fn(l) {
             case tight {
-              True -> ast.TightListItem(l)
-              False -> ast.ListItem(l)
+              True -> ast.TightListItem(l.0)
+              False -> ast.ListItem(l.0)
             }
           }),
-        marker,
+          marker,
+        ),
+        xs |> list.flat_map(pair.second) |> merge_references,
       )
     }
     OrderedList(items, start, marker) -> {
       let tight = True
-
-      ast.OrderedList(
+      let xs =
         items
-          |> list.map(list.map(_, parse_block_state(_)))
-          |> list.map(fn(l) {
+        |> list.map(list.map(_, parse_block_state(_)))
+        |> list.map(list.unzip)
+
+      #(
+        ast.OrderedList(
+          list.map(xs, fn(l) {
             case tight {
-              True -> ast.TightListItem(l)
-              False -> ast.ListItem(l)
+              True -> ast.TightListItem(l.0)
+              False -> ast.ListItem(l.0)
             }
           }),
-        start,
-        marker,
+          start,
+          marker,
+        ),
+        xs |> list.flat_map(pair.second) |> merge_references,
       )
     }
   }
@@ -134,7 +163,7 @@ fn do_parse_blocks(
   let block_quote_results =
     l |> result.try(apply_regex(_, with: block_quote_regex))
   let ul_results = l |> result.try(apply_regex(_, with: ul_regex))
-  let ol_results = l |> result.try(apply_regex(_, with: ul_regex))
+  let ol_results = l |> result.try(apply_regex(_, with: ol_regex))
 
   let is_hr =
     l |> result.map(regex.check(_, with: hr_regex)) |> result.unwrap(False)
@@ -764,7 +793,11 @@ fn parse_blocks(lines: List(String)) -> List(BlockParseState) {
 }
 
 pub fn parse_document(lines: List(String)) -> ast.Document {
-  parse_blocks(lines)
-  |> list.map(parse_block_state)
-  |> ast.Document(dict.new())
+  let #(blocks, refs) =
+    parse_blocks(lines)
+    |> list.map(parse_block_state)
+    |> list.unzip
+    |> pair.map_second(merge_references)
+
+  ast.Document(blocks, refs)
 }
