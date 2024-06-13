@@ -9,6 +9,9 @@ links = [
 	{ title = "Sponsor", href = "https://github.com/sponsors/mscharley" },
 ]
 
+[javascript]
+#typescript_declarations = true
+
 [repository]
 type = "github"
 user = "mscharley"

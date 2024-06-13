@@ -41,13 +41,6 @@ pub type InlineNode {
   PlainText(contents: String)
   HardLineBreak
   SoftLineBreak
-  /// A named HTML entity. The CommonMark spec calls for these to be rendered into unicode
-  /// instead of as HTML entities. Equivalent to `"&" <> name <> ";"` in HTML.
-  NamedEntity(name: String, codepoint: List(UtfCodepoint))
-  /// Numeric character entity. The CommonMark spec calls for these to be rendered into unicode
-  /// instead of as HTML entities. Equivalent to `"&" <> int.to_string(codepoint) <> ";"` in
-  /// HTML.
-  NumericCharacterReference(codepoint: UtfCodepoint, hex: Bool)
 }
 
 pub type ListItem {

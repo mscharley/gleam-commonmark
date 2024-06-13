@@ -6,16 +6,16 @@ import gleam/option.{None, Some}
 import gleam/string
 
 pub fn sanitize_href_property(prop: String) -> String {
-  // TODO: This needs to be implemented
   prop
   |> string.replace("&", "&amp;")
   |> string.replace("\"", "%22")
+  |> string.replace("\\", "%5C")
 }
 
 pub fn sanitize_plain_text(text: String) -> String {
-  // TODO: This needs to be implemented
   text
   |> string.replace("&", "&amp;")
+  |> string.replace("\"", "&quot;")
   |> string.replace("<", "&lt;")
   |> string.replace(">", "&gt;")
 }
@@ -47,16 +47,13 @@ pub fn inline_to_html(
       <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
       <> "</strong>"
     ast.StrikeThrough(contents) ->
-      "<s>"
+      "<del>"
       <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
-      <> "</s>"
+      <> "</del>"
     ast.HtmlInline(html) -> html
     ast.Image(_, _) -> "Image"
     ast.ReferenceLink(_, _) -> "Link"
     ast.Link(_, _, _) -> "Link"
-    ast.NamedEntity("amp", _) -> "&amp;"
-    ast.NamedEntity(_, cp) -> string.from_utf_codepoints(cp)
-    ast.NumericCharacterReference(cp, _) -> string.from_utf_codepoints([cp])
   }
 }
 
