@@ -10,17 +10,15 @@ pub type Msg {
 
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    SetTab(tab) -> #(io.debug(Model(..model, tab: tab)), effect.none())
+    SetTab(tab) -> #(Model(..model, tab: tab), effect.none())
     UpdateInput(input) -> {
       let document = commonmark.parse(input)
       #(
-        io.debug(
-          Model(
-            ..model,
-            input: input,
-            document: document,
-            html: commonmark.to_html(document),
-          ),
+        Model(
+          ..model,
+          input: input,
+          document: document,
+          html: commonmark.to_html(document),
         ),
         effect.none(),
       )

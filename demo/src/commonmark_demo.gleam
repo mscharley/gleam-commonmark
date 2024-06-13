@@ -1,7 +1,6 @@
 import commonmark_demo/message.{type Msg, update}
 import commonmark_demo/model.{type Model, Model}
 import gleam/dynamic
-import gleam/io
 import gleam/result
 import lustre
 import lustre/attribute
@@ -15,7 +14,7 @@ import lustre/ui/layout/aside
 import pprint
 
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
-  #(io.debug(model.new()), effect.none())
+  #(model.new(), effect.none())
 }
 
 fn on_input(event: dynamic.Dynamic) -> Result(Msg, dynamic.DecodeErrors) {
