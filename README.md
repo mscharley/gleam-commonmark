@@ -46,8 +46,8 @@ The current version of CommonMark targetted is [0.31.2][commonmark].
 * ❌ Link reference definitions
 * ✅ Paragraphs
 * ✅ Block quotes
-* ❌ Ordered lists
-* ❌ Unordered lists
+* 🚧 Ordered lists
+* 🚧 Unordered lists
 * ❌ Code spans
 * ❌ Emphasis and strong emphasis
 * ❌ Links
