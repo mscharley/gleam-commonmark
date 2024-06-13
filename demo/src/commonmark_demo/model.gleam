@@ -35,7 +35,7 @@ pub fn new() -> Model {
   let document = commonmark.parse(initial_document)
   let html = commonmark.to_html(document)
 
-  Model(AST, initial_document, document, html)
+  Model(Preview, initial_document, document, html)
 }
 
 pub type Tab {

@@ -25,6 +25,24 @@ fn on_input(event: dynamic.Dynamic) -> Result(Msg, dynamic.DecodeErrors) {
   Ok(message.UpdateInput(value))
 }
 
+fn tab_button(
+  model: Model,
+  tab: model.Tab,
+  label: String,
+) -> element.Element(Msg) {
+  ui.button(
+    [
+      event.on_click(message.SetTab(tab)),
+      attribute.style([#("margin-right", "1em")]),
+      case model.tab == tab {
+        True -> button.primary()
+        False -> button.outline()
+      },
+    ],
+    [element.text(label)],
+  )
+}
+
 fn view(model: Model) -> element.Element(Msg) {
   ui.centre(
     [],
@@ -66,27 +84,8 @@ fn view(model: Model) -> element.Element(Msg) {
         [
           html.div([], [
             html.div([attribute.style([#("margin", "0.75em 0")])], [
-              ui.button(
-                [
-                  event.on_click(message.SetTab(model.AST)),
-                  attribute.style([#("margin-right", "1em")]),
-                  case model.tab {
-                    model.AST -> button.primary()
-                    _ -> button.outline()
-                  },
-                ],
-                [element.text("AST")],
-              ),
-              ui.button(
-                [
-                  event.on_click(message.SetTab(model.Preview)),
-                  case model.tab {
-                    model.Preview -> button.primary()
-                    _ -> button.outline()
-                  },
-                ],
-                [element.text("Preview")],
-              ),
+              tab_button(model, model.Preview, "Preview"),
+              tab_button(model, model.AST, "AST"),
             ]),
             case model.tab {
               model.AST ->
@@ -96,11 +95,10 @@ fn view(model: Model) -> element.Element(Msg) {
                   ]),
                 ])
               model.Preview ->
-                html.div([], [
-                  html.pre([attribute.style([#("white-space", "pre-wrap")])], [
-                    element.text(model.html),
-                  ]),
-                ])
+                ui.prose(
+                  [attribute.attribute("dangerous-unescaped-html", model.html)],
+                  [],
+                )
             },
           ]),
         ],
