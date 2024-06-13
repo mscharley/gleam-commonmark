@@ -6,15 +6,18 @@ test_name: readme_test
 ---
 Document(
   [
-    Heading(1, [Text("commonmark")]),
+    Heading(
+      1,
+      [PlainText("commonmark")],
+    ),
     Paragraph([
-      Text("[![Package Version](https://img.shields.io/hexpm/v/commonmark)](https://hex.pm/packages/commonmark)"),
+      PlainText("[![Package Version](https://img.shields.io/hexpm/v/commonmark)](https://hex.pm/packages/commonmark)"),
       SoftLineBreak,
-      Text("[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/commonmark/)"),
+      PlainText("[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/commonmark/)"),
       SoftLineBreak,
-      Text("![Erlang-compatible](https://img.shields.io/badge/target-erlang-b83998)"),
+      PlainText("![Erlang-compatible](https://img.shields.io/badge/target-erlang-b83998)"),
       SoftLineBreak,
-      Text("![JavaScript-compatible](https://img.shields.io/badge/target-javascript-f1e05a)"),
+      PlainText("![JavaScript-compatible](https://img.shields.io/badge/target-javascript-f1e05a)"),
     ]),
     CodeBlock(
       Some("sh"),
@@ -39,160 +42,175 @@ This is a test."
 ",
     ),
     Paragraph([
-      Text("Further documentation can be found at "),
+      PlainText("Further documentation can be found at "),
       UriAutolink("https://hexdocs.pm/commonmark"),
-      Text("."),
+      PlainText("."),
     ]),
     Paragraph([
-      Text("[You can view this README as an AST here.][readme-ast]"),
+      PlainText("[You can view this README as an AST here.][readme-ast]"),
     ]),
     Paragraph([
-      Text("[readme-ast]: https://github.com/mscharley/gleam-commonmark/tree/main/birdie_snapshots/common_mark_readme.accepted"),
+      PlainText("[readme-ast]: https://github.com/mscharley/gleam-commonmark/tree/main/birdie_snapshots/common_mark_readme.accepted"),
     ]),
-    Heading(2, [Text("Syntax support")]),
+    Heading(
+      2,
+      [PlainText("Syntax support")],
+    ),
     Paragraph([
-      Text("🚧 This package is still heavily under construction 🚧"),
+      PlainText("🚧 This package is still heavily under construction 🚧"),
     ]),
     Paragraph([
-      Text("✅ - Completed | 🚧 - In Progress | ❌ - Unsupported"),
+      PlainText("✅ - Completed | 🚧 - In Progress | ❌ - Unsupported"),
     ]),
-    Heading(3, [Text("CommonMark")]),
+    Heading(
+      3,
+      [PlainText("CommonMark")],
+    ),
     Paragraph([
-      Text("The current version of CommonMark targetted is [0.31.2][commonmark]."),
+      PlainText("The current version of CommonMark targetted is [0.31.2][commonmark]."),
     ]),
     UnorderedList(
       [
         TightListItem([
           Paragraph([
-            Text("✅ Thematic breaks"),
+            PlainText("✅ Thematic breaks"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("✅ ATX headings"),
+            PlainText("✅ ATX headings"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("✅ Setext headings"),
+            PlainText("✅ Setext headings"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("✅ Indented code blocks"),
+            PlainText("✅ Indented code blocks"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("✅ Fenced code blocks"),
+            PlainText("✅ Fenced code blocks"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("❌ Link reference definitions"),
+            PlainText("❌ Link reference definitions"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("✅ Paragraphs"),
+            PlainText("✅ Paragraphs"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("✅ Block quotes"),
+            PlainText("✅ Block quotes"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("❌ Ordered lists"),
+            PlainText("🚧 Ordered lists"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("❌ Unordered lists"),
+            PlainText("🚧 Unordered lists"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("❌ Code spans"),
+            PlainText("❌ Code spans"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("❌ Emphasis and strong emphasis"),
-          ]),
-        ]),
-        TightListItem([
-          Paragraph([Text("❌ Links")]),
-        ]),
-        TightListItem([
-          Paragraph([Text("❌ Images")]),
-        ]),
-        TightListItem([
-          Paragraph([
-            Text("✅ Autolinks"),
+            PlainText("❌ Emphasis and strong emphasis"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("✅ Hard line breaks"),
+            PlainText("❌ Links"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("✅ Soft line breaks"),
+            PlainText("❌ Images"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            PlainText("✅ Autolinks"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            PlainText("✅ Hard line breaks"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            PlainText("✅ Soft line breaks"),
           ]),
         ]),
       ],
       AsteriskListMarker,
     ),
     Paragraph([
-      Text("Raw HTML features will be tackled last as the potential security issues around this need to be considered."),
+      PlainText("Raw HTML features will be tackled last as the potential security issues around this need to be considered."),
     ]),
     UnorderedList(
       [
         TightListItem([
           Paragraph([
-            Text("❌ HTML blocks"),
+            PlainText("❌ HTML blocks"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("❌ Inline HTML"),
+            PlainText("❌ Inline HTML"),
           ]),
         ]),
       ],
       AsteriskListMarker,
     ),
     Paragraph([
-      Text("[commonmark]: https://spec.commonmark.org/0.31.2/"),
+      PlainText("[commonmark]: https://spec.commonmark.org/0.31.2/"),
     ]),
     Heading(
       3,
       [
-        Text("Github Flavoured Markdown"),
+        PlainText("Github Flavoured Markdown"),
       ],
     ),
     Paragraph([
-      Text("The current version of GFM targetted is [0.29-gfm][gfm]."),
+      PlainText("The current version of GFM targetted is [0.29-gfm][gfm]."),
     ]),
     UnorderedList(
       [
         TightListItem([
-          Paragraph([Text("❌ Tables")]),
+          Paragraph([
+            PlainText("❌ Tables"),
+          ]),
         ]),
         TightListItem([
           Paragraph([
-            Text("❌ Strikethrough"),
+            PlainText("❌ Strikethrough"),
           ]),
         ]),
       ],
       AsteriskListMarker,
     ),
     Paragraph([
-      Text("[gfm]: https://github.github.com/gfm/"),
+      PlainText("[gfm]: https://github.github.com/gfm/"),
     ]),
-    Heading(2, [Text("Development")]),
+    Heading(
+      2,
+      [PlainText("Development")],
+    ),
     CodeBlock(
       Some("sh"),
       Some("sh"),

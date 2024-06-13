@@ -68,6 +68,6 @@ pub fn parse_autolink(href: String) -> ast.InlineNode {
   case regex.check(email_regex, href), regex.check(uri_regex, href) {
     True, _ -> ast.EmailAutolink(href)
     _, True -> ast.UriAutolink(href)
-    False, False -> ast.Text("<" <> href <> ">")
+    False, False -> ast.PlainText("<" <> href <> ">")
   }
 }

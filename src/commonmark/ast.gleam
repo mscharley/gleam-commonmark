@@ -38,7 +38,7 @@ pub type InlineNode {
   /// for the canonical representation of line breaks that renderers can make decisions about. The
   /// exception is `CodeBlock(Text(""))` which may contain line breaks (standardised to `"\n"`) as
   /// the full block of text inside the `CodeBlock` is returned as a single pre-formatted text blob.
-  Text(contents: String)
+  PlainText(contents: String)
   HardLineBreak
   SoftLineBreak
   /// A named HTML entity. The CommonMark spec calls for these to be rendered into unicode

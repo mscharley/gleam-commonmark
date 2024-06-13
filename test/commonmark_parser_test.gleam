@@ -8,7 +8,7 @@ pub fn hello_world_test() {
   "Hello world!\n"
   |> commonmark.parse
   |> expect.to_equal(ast.Document(
-    [ast.Paragraph([ast.Text("Hello world!")])],
+    [ast.Paragraph([ast.PlainText("Hello world!")])],
     dict.new(),
   ))
 }
@@ -18,8 +18,8 @@ pub fn paragraphs_test() {
   |> commonmark.parse
   |> expect.to_equal(ast.Document(
     [
-      ast.Paragraph([ast.Text("Hello world!")]),
-      ast.Paragraph([ast.Text("Goodbye, world!")]),
+      ast.Paragraph([ast.PlainText("Hello world!")]),
+      ast.Paragraph([ast.PlainText("Goodbye, world!")]),
     ],
     dict.new(),
   ))
@@ -30,9 +30,9 @@ pub fn windows_test() {
   |> commonmark.parse
   |> expect.to_equal(ast.Document(
     [
-      ast.Paragraph([ast.Text("Hello Windows!")]),
-      ast.Paragraph([ast.Text("Hello OS X!")]),
-      ast.Paragraph([ast.Text("Goodbye folks!")]),
+      ast.Paragraph([ast.PlainText("Hello Windows!")]),
+      ast.Paragraph([ast.PlainText("Hello OS X!")]),
+      ast.Paragraph([ast.PlainText("Goodbye folks!")]),
     ],
     dict.new(),
   ))

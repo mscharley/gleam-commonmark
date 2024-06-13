@@ -15,18 +15,21 @@ fn do_parse_text(
 ) -> List(ast.InlineNode) {
   case state, text {
     AutolinkAccumulator(ts), [] -> [
-      ast.Text(["<", ..list.reverse(ts)] |> string.join("")),
+      ast.PlainText(["<", ..list.reverse(ts)] |> string.join("")),
       ..acc
     ]
     TextAccumulator(ts), [] ->
-      [ast.Text(ts |> list.reverse |> string.join("") |> string.trim), ..acc]
+      [
+        ast.PlainText(ts |> list.reverse |> string.join("") |> string.trim),
+        ..acc
+      ]
       |> list.reverse
     TextAccumulator(ts), [" ", " ", "\n", ..gs]
     | TextAccumulator(ts), ["\\", "\n", ..gs]
     ->
       do_parse_text(gs, TextAccumulator([]), [
         ast.HardLineBreak,
-        ast.Text(ts |> list.reverse |> string.join("") |> string.trim),
+        ast.PlainText(ts |> list.reverse |> string.join("") |> string.trim),
         ..acc
       ])
     AutolinkAccumulator(ts), [" ", " ", "\n", ..gs]
@@ -34,24 +37,24 @@ fn do_parse_text(
     ->
       do_parse_text(gs, TextAccumulator([]), [
         ast.HardLineBreak,
-        ast.Text(list.reverse(["<", ..ts]) |> string.join("")),
+        ast.PlainText(list.reverse(["<", ..ts]) |> string.join("")),
         ..acc
       ])
     TextAccumulator(ts), ["\n", ..gs] ->
       do_parse_text(gs, TextAccumulator([]), [
         ast.SoftLineBreak,
-        ast.Text(ts |> list.reverse |> string.join("") |> string.trim),
+        ast.PlainText(ts |> list.reverse |> string.join("") |> string.trim),
         ..acc
       ])
     AutolinkAccumulator(ts), ["\n", ..gs] ->
       do_parse_text(gs, TextAccumulator([]), [
         ast.SoftLineBreak,
-        ast.Text(list.reverse(["<", ..ts]) |> string.join("")),
+        ast.PlainText(list.reverse(["<", ..ts]) |> string.join("")),
         ..acc
       ])
     TextAccumulator(ts), ["<", ..gs] ->
       do_parse_text(gs, AutolinkAccumulator([]), [
-        ast.Text(ts |> list.reverse |> string.join("")),
+        ast.PlainText(ts |> list.reverse |> string.join("")),
         ..acc
       ])
     AutolinkAccumulator(ts), ["\t" as space, ..gs]

@@ -25,7 +25,7 @@ pub fn inline_to_html(
   refs: Dict(String, ast.Reference),
 ) -> String {
   case inline {
-    ast.Text(contents) -> contents |> sanitize_plain_text
+    ast.PlainText(contents) -> contents |> sanitize_plain_text
     ast.HardLineBreak -> "<br />\n"
     ast.SoftLineBreak -> "\n"
     ast.UriAutolink(href) ->
