@@ -14,7 +14,6 @@ import pprint
 fn on_input(event: dynamic.Dynamic) -> Result(Msg, dynamic.DecodeErrors) {
   use target <- result.try(dynamic.field("target", dynamic.dynamic)(event))
   use value <- result.try(dynamic.field("value", dynamic.string)(target))
-  // do your stuff!
   Ok(message.UpdateInput(value))
 }
 
@@ -36,7 +35,7 @@ fn tab_button(
   )
 }
 
-fn edit_area(model: Model) -> element.Element(Msg) {
+fn edit_area(content: String) -> element.Element(Msg) {
   html.textarea(
     [
       event.on("input", on_input),
@@ -49,9 +48,10 @@ fn edit_area(model: Model) -> element.Element(Msg) {
         #("flex-grow", "1"),
         #("font-family", "var(--font-mono)"),
         #("resize", "none"),
+        #("z-index", "1"),
       ]),
     ],
-    model.input,
+    content,
   )
 }
 
@@ -65,10 +65,10 @@ pub fn view(model: Model) -> element.Element(Msg) {
         attribute.style([
           #("width", "100vw"),
           #("--gap", "0"),
-          #("--min", "40%"),
+          #("--min", "50%"),
         ]),
       ],
-      edit_area(model),
+      edit_area(model.input),
       html.div(
         [
           attribute.style([
