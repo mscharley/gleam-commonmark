@@ -26,7 +26,10 @@ Further documentation can be found at <https://hexdocs.pm/commonmark>.
 
 [You can view this README as an AST here.][readme-ast]
 
+There is also an [interactive demo][demo] which you can use to test how this library interacts with your documents.
+
 [readme-ast]: https://github.com/mscharley/gleam-commonmark/tree/main/birdie_snapshots/common_mark_readme.accepted
+[demo]: https://mscharley.github.io/gleam-commonmark/
 
 ## Syntax support
 
