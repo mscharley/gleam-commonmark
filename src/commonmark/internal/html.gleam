@@ -51,7 +51,8 @@ pub fn inline_to_html(
       <> { contents |> list.map(inline_to_html(_, refs)) |> string.join("") }
       <> "</del>"
     ast.HtmlInline(html) -> html
-    ast.Image(_, _) -> "Image"
+    ast.ReferenceImage(_, _) -> "Image"
+    ast.Image(_, _, _) -> "Image"
     ast.ReferenceLink(_, _) -> "Link"
     ast.Link(_, _, _) -> "Link"
   }
