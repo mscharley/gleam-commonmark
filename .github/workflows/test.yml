@@ -24,3 +24,23 @@ jobs:
       - run: gleam test
       - run: gleam test --target js
       - run: gleam format --check src test
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.tool-versions'
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: '.tool-versions'
+          version-type: 'strict'
+      - run: gleam deps download
+        working-directory: ./demo
+      - run: gleam test
+        working-directory: ./demo
+      - run: gleam test --target js
+        working-directory: ./demo
+      - run: gleam format --check src test
+        working-directory: ./demo
