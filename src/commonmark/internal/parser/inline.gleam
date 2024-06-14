@@ -38,6 +38,16 @@ fn finalise_plain_text(
   |> string.join("")
 }
 
+fn translate_numerical_entity(
+  codepoint: Result(Int, Nil),
+  rest: List(String),
+) -> Result(#(List(String), String), Nil) {
+  codepoint
+  |> result.map(replace_null_byte)
+  |> result.try(string.utf_codepoint)
+  |> result.map(fn(cp) { #(rest, string.from_utf_codepoints([cp])) })
+}
+
 fn match_entity(input: List(String)) -> Result(#(List(String), String), Nil) {
   entity.match_html_entity(input)
   |> result.try_recover(fn(_) {
@@ -49,25 +59,11 @@ fn match_entity(input: List(String)) -> Result(#(List(String), String), Nil) {
       [regex.Match(full, [Some(n)])], _ ->
         n
         |> int.parse
-        |> result.map(replace_null_byte)
-        |> result.try(string.utf_codepoint)
-        |> result.map(fn(cp) {
-          #(
-            list.drop(input, string.length(full)),
-            string.from_utf_codepoints([cp]),
-          )
-        })
+        |> translate_numerical_entity(list.drop(input, string.length(full)))
       _, [regex.Match(full, [Some(n)])] ->
         n
         |> int.base_parse(16)
-        |> result.map(replace_null_byte)
-        |> result.try(string.utf_codepoint)
-        |> result.map(fn(cp) {
-          #(
-            list.drop(input, string.length(full)),
-            string.from_utf_codepoints([cp]),
-          )
-        })
+        |> translate_numerical_entity(list.drop(input, string.length(full)))
       _, _ -> Error(Nil)
     }
   })

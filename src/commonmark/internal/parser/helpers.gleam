@@ -27,13 +27,14 @@ pub fn indent_pattern(indent: Int) -> String {
   case indent {
     0 -> ""
     i if i >= 4 -> tab_stop <> indent_pattern(i - 4)
-    i -> " {" <> int.to_string(i) <> "}"
+    i -> "(?: {" <> int.to_string(i) <> "}|\t)"
   }
 }
 
 fn do_trim_indent(line: String, n: Int, removed: Int) -> String {
   case line {
     _ if removed >= n -> line
+    "\t" <> rest if n < 4 -> string.repeat(" ", 4 - n) <> rest
     " " <> rest -> do_trim_indent(rest, n, removed + 1)
     "\t" <> rest -> {
       let next_tab_stop = removed + { 4 - { removed % 4 } }

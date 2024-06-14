@@ -316,6 +316,37 @@ fn do_parse_blocks(
           }
       }
     // Horizontal breaks
+    UnorderedListBuilder(item, items, tight, marker, _), [_, ..ls] if is_hr ->
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          HorizontalBreak,
+          UnorderedList(
+            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+            tight && !list.any(list.drop(item, 1), is_empty_line),
+            ul_marker(marker),
+          ),
+          ..acc
+        ],
+        ls,
+      )
+    OrderedListBuilder(item, items, tight, marker, start, _), [_, ..ls]
+      if is_hr
+    ->
+      do_parse_blocks(
+        OutsideBlock,
+        [
+          HorizontalBreak,
+          OrderedList(
+            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+            start,
+            tight && !list.any(list.drop(item, 1), is_empty_line),
+            ol_marker(marker),
+          ),
+          ..acc
+        ],
+        ls,
+      )
     ParagraphBuilder(bs), [_, ..ls] if is_hr ->
       do_parse_blocks(
         OutsideBlock,
