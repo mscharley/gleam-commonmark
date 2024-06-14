@@ -1,7 +1,7 @@
 ---
 version: 1.1.6
 title: CommonMark readme
-file: ./test/commonmark_readme.gleam
+file: ./test/commonmark_test/snapshot/readme.gleam
 test_name: readme_test
 ---
 Document(
@@ -219,8 +219,9 @@ This is a test."
     CodeBlock(
       Some("sh"),
       Some("sh"),
-      "gleam test  # Run the tests
-gleam shell # Run an Erlang shell
+      "gleam test              # Run the tests
+gleam run -m benchmark  # Run the benchmarks
+gleam shell             # Run an Erlang shell
 ",
     ),
   ],

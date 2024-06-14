@@ -9,7 +9,7 @@ import simplifile
 import startest.{describe, it, xit}
 import startest/expect
 
-const spec_file = "./test/spec-0.31.2.json"
+const spec_file = "./test/commonmark_test/spec-0.31.2.json"
 
 // This is a list of expected failures
 const blacklist = [
