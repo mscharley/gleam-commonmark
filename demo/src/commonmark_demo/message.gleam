@@ -1,6 +1,5 @@
 import commonmark
 import commonmark_demo/model.{type Model, Model}
-import gleam/io
 import lustre/effect
 
 pub type Msg {
