@@ -6,7 +6,7 @@
 //// CommonMark defines two major types of elements which have a hierarchical relationship:
 ////
 //// * A Document has many blocks.
-//// * A block has zero or more inline elements that make up it's content.
+//// * A block contains either other blocks or a list of inline elements
 //// * Inline elements define the textual contents of the document.
 
 import gleam/dict.{type Dict}

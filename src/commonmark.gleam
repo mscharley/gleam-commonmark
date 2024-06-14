@@ -4,8 +4,8 @@
 //// into either an AST for further manipulation or directly to HTML.
 
 import commonmark/ast
-import commonmark/internal/html
 import commonmark/internal/parser/block.{parse_document}
+import commonmark/internal/renderer/html
 import gleam/list
 import gleam/regex
 import gleam/string
@@ -31,7 +31,7 @@ pub fn to_html(document: ast.Document) -> String {
 }
 
 /// Render an AST into a HTML string.
-/// 
+///
 /// This uses a more strict rendered that won't attempt to fix issues in the document.
 pub fn to_html_strict(document: ast.Document) -> Result(String, Nil) {
   document.blocks
@@ -48,8 +48,8 @@ pub fn render_to_html(document: String) -> String {
 }
 
 /// Render a CommonMark document into a HTML string.
-/// 
-/// This uses a more strict rendered that won't attempt to fix issues in the document.
+///
+/// This uses a more strict rendering that won't attempt to fix issues in the document.
 pub fn render_to_html_strict(document: String) -> Result(String, Nil) {
   document |> parse |> to_html_strict
 }
