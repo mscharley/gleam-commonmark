@@ -1,5 +1,6 @@
 import commonmark
 import commonmark/ast.{type Document, Document}
+import lustre/effect
 
 const initial_document = "Hello, Gleam!
 =============
@@ -31,11 +32,11 @@ fn main () {
 > Something someone once said
 "
 
-pub fn new() -> Model {
+pub fn init(_flags) -> #(Model, effect.Effect(a)) {
   let document = commonmark.parse(initial_document)
   let html = commonmark.to_html(document)
 
-  Model(Preview, initial_document, document, html)
+  #(Model(Preview, initial_document, document, html), effect.none())
 }
 
 pub type Tab {

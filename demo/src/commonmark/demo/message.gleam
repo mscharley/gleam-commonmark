@@ -1,5 +1,5 @@
 import commonmark
-import commonmark_demo/model.{type Model, Model}
+import commonmark/demo/model.{type Model, Model}
 import lustre/effect
 
 pub type Msg {
