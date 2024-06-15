@@ -80,5 +80,6 @@ The current version of GFM targetted is [0.29-gfm][gfm].
 ```sh
 gleam test              # Run the tests
 gleam run -m benchmark  # Run the benchmarks
+gleam run -m codegen    # Run the codegen tasks (these are committed in the repo)
 gleam shell             # Run an Erlang shell
 ```
