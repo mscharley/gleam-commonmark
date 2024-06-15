@@ -11,6 +11,9 @@ import startest/expect
 
 const spec_file = "./test/commonmark_test/spec-0.31.2.json"
 
+/// A list of tests involving invalid markdown that won't parse in strict mode
+const invalid_tests = []
+
 const html_tests = [
   // HTML blocks
   148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163,
@@ -76,15 +79,22 @@ pub fn commonmark_spec_tests() {
 }
 
 fn run_section(ts: #(String, List(Test))) {
+  let #(title, reversed_tests) = ts
+  let tests = list.reverse(reversed_tests)
+
   describe(
-    ts.0,
-    ts.1
-      |> list.reverse
-      |> list.map(run_test),
+    title,
+    list.concat([
+      list.map(tests, run_safe_test),
+      list.map(
+        tests |> list.filter(fn(t) { !list.contains(invalid_tests, t) }),
+        run_strict_test,
+      ),
+    ]),
   )
 }
 
-fn run_test(t: Test) {
+fn run_safe_test(t: Test) {
   let allowed =
     only
     |> option.map(fn(n) { n == t.example })
@@ -99,5 +109,23 @@ fn run_test(t: Test) {
     t.markdown
     |> commonmark.render_to_html
     |> expect.to_equal(t.html)
+  })
+}
+
+fn run_strict_test(t: Test) {
+  let allowed =
+    only
+    |> option.map(fn(n) { n == t.example })
+    |> option.lazy_unwrap(fn() { !list.contains(blacklist, t.example) })
+
+  let f = case allowed {
+    True -> it
+    False -> xit
+  }
+
+  f("Example " <> int.to_string(t.example) <> " (strict)", fn() {
+    t.markdown
+    |> commonmark.render_to_html_strict
+    |> expect.to_equal(Ok(t.html))
   })
 }

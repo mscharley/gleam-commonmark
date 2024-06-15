@@ -1,8 +1,9 @@
 import commonmark/ast
 import gleam/dict.{type Dict}
+import gleam/function.{identity}
 import gleam/int
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 
@@ -45,26 +46,29 @@ fn inline_to_html_safe(
   refs: ast.ReferenceList,
 ) -> String {
   case inline {
-    ast.PlainText(contents) -> contents |> sanitize_plain_text
-    ast.HardLineBreak -> "<br />\n"
-    ast.SoftLineBreak -> "\n"
-    ast.UriAutolink(href) ->
-      "<a href=\"" <> sanitize_href_property(href) <> "\">" <> href <> "</a>"
+    // Shared items
+    ast.CodeSpan(contents) ->
+      "<code>" <> sanitize_plain_text(contents) <> "</code>"
     ast.EmailAutolink(email) ->
       "<a href=\"mailto:"
       <> sanitize_href_property(email)
       <> "\">"
-      <> email
+      <> sanitize_plain_text(email)
       <> "</a>"
-    ast.CodeSpan(contents) ->
-      "<code>" <> { contents |> sanitize_plain_text } <> "</code>"
+    ast.HardLineBreak -> "<br />\n"
+    ast.HtmlInline(html) -> html
+    ast.PlainText(contents) -> sanitize_plain_text(contents)
+    ast.SoftLineBreak -> "\n"
+    ast.UriAutolink(href) ->
+      "<a href=\"" <> sanitize_href_property(href) <> "\">" <> href <> "</a>"
+
+    // Unique items
     ast.Emphasis(contents, _) ->
       "<em>" <> inline_list_to_html_safe(contents, refs) <> "</em>"
     ast.StrongEmphasis(contents, _) ->
       "<strong>" <> inline_list_to_html_safe(contents, refs) <> "</strong>"
     ast.StrikeThrough(contents) ->
       "<del>" <> inline_list_to_html_safe(contents, refs) <> "</del>"
-    ast.HtmlInline(html) -> html
     ast.ReferenceImage(_, _) -> "Image"
     ast.Image(_, _, _) -> "Image"
     ast.ReferenceLink(_, _) -> "Link"
@@ -95,6 +99,41 @@ fn inline_to_html(
   }
 }
 
+fn loose_list_item(content: List(String)) -> String {
+  "<li>\n" <> string.join(content, "") <> "</li>\n"
+}
+
+fn tight_list_item(
+  contents: List(ast.BlockNode),
+  refs: ast.ReferenceList,
+  f: fn(ast.BlockNode, ast.ReferenceList, Bool) -> a,
+  all: fn(List(a)) -> b,
+  try: fn(b, fn(List(String)) -> a) -> a,
+  map: fn(a, fn(String) -> String) -> a,
+  unit: fn(String) -> a,
+) -> a {
+  let r = contents |> list.reverse
+  use rest <- try(
+    r
+    |> list.drop(1)
+    |> list.map(fn(b) {
+      case b {
+        ast.Paragraph(c) ->
+          f(ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])), refs, True)
+        _ -> f(b, refs, True)
+      }
+    })
+    |> list.reverse
+    |> all,
+  )
+  use last <- map(case list.first(r) {
+    Ok(block) -> f(block, refs, True)
+    Error(_) -> unit("")
+  })
+
+  "<li>" <> string.join(rest, "") <> last <> "</li>\n"
+}
+
 fn list_item_to_html(
   item: ast.ListItem,
   refs: Dict(String, ast.Reference),
@@ -105,33 +144,17 @@ fn list_item_to_html(
       contents
       |> list.map(block_to_html(_, refs, False))
       |> result.all
-      |> result.map(fn(c) { "<li>\n" <> { string.join(c, "") } <> "</li>\n" })
+      |> result.map(loose_list_item)
     ast.TightListItem(contents) -> {
-      let r = contents |> list.reverse
-
-      use rest <- result.try(
-        r
-        |> list.drop(1)
-        |> list.map(fn(b) {
-          case b {
-            ast.Paragraph(c) ->
-              block_to_html(
-                ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])),
-                refs,
-                True,
-              )
-            _ -> block_to_html(b, refs, True)
-          }
-        })
-        |> list.reverse
-        |> result.all,
+      tight_list_item(
+        contents,
+        refs,
+        block_to_html,
+        result.all,
+        result.try,
+        result.map,
+        Ok,
       )
-      use last <- result.map(case list.first(r) {
-        Ok(block) -> block_to_html(block, refs, True)
-        Error(_) -> Ok("")
-      })
-
-      "<li>" <> string.join(rest, "") <> last <> "</li>\n"
     }
   }
 }
@@ -143,39 +166,56 @@ fn list_item_to_html_safe(
   case item {
     ast.ListItem([]) | ast.TightListItem([]) -> "<li></li>\n"
     ast.ListItem(contents) ->
-      "<li>\n"
-      <> {
-        contents
-        |> list.map(block_to_html_safe(_, refs, False))
-        |> string.join("")
-      }
-      <> "</li>\n"
+      loose_list_item(contents |> list.map(block_to_html_safe(_, refs, False)))
     ast.TightListItem(contents) -> {
-      let r = contents |> list.reverse
-      let rest =
-        r
-        |> list.drop(1)
-        |> list.map(fn(b) {
-          case b {
-            ast.Paragraph(c) ->
-              block_to_html_safe(
-                ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])),
-                refs,
-                True,
-              )
-            _ -> block_to_html_safe(b, refs, True)
-          }
-        })
-        |> list.reverse
-        |> string.join("")
-      let last = case list.first(r) {
-        Ok(block) -> block_to_html_safe(block, refs, True)
-        Error(_) -> ""
-      }
-
-      "<li>" <> rest <> last <> "</li>\n"
+      let passthrough = fn(x: a, f: fn(a) -> b) -> b { f(x) }
+      tight_list_item(
+        contents,
+        refs,
+        block_to_html_safe,
+        identity,
+        passthrough,
+        passthrough,
+        identity,
+      )
     }
   }
+}
+
+fn blockquote(contents: List(String)) -> String {
+  "<blockquote>\n" <> string.join(contents, "") <> "</blockquote>\n"
+}
+
+fn code(contents: String, language: Option(String)) -> String {
+  let class =
+    language
+    |> option.map(fn(s) { " class=\"language-" <> s <> "\"" })
+    |> option.unwrap("")
+
+  "<pre><code" <> class <> ">" <> contents <> "</code></pre>\n"
+}
+
+fn header(contents: List(String), level: Int) -> String {
+  let tag = "h" <> int.to_string(level)
+
+  "<" <> tag <> ">" <> string.join(contents, "") <> "</" <> tag <> ">\n"
+}
+
+fn ol(content: List(String), start: Option(Int)) -> String {
+  let start_attr =
+    start
+    |> option.map(fn(s) { " start=\"" <> int.to_string(s) <> "\"" })
+    |> option.unwrap("")
+
+  "<ol" <> start_attr <> ">\n" <> string.join(content, "") <> "</ol>\n"
+}
+
+fn p(content: List(String)) -> String {
+  "<p>" <> string.join(content, "") <> "</p>\n"
+}
+
+fn ul(content: List(String)) -> String {
+  "<ul>\n" <> string.join(content, "") <> "</ul>\n"
 }
 
 pub fn block_to_html(
@@ -184,30 +224,30 @@ pub fn block_to_html(
   tight: Bool,
 ) -> Result(String, ast.RenderError) {
   case block {
-    ast.CodeBlock(None, _, contents) ->
-      Ok("<pre><code>" <> sanitize_plain_text(contents) <> "</code></pre>\n")
-    ast.CodeBlock(Some(info), _, contents) ->
-      Ok(
-        "<pre><code class=\"language-"
-        <> info
-        <> "\">"
-        <> { contents |> sanitize_plain_text }
-        <> "</code></pre>\n",
-      )
+    ast.BlockQuote(contents) ->
+      contents
+      |> list.map(block_to_html(_, refs, False))
+      |> result.all
+      |> result.map(blockquote)
+    ast.CodeBlock(language, _, contents) ->
+      Ok(code(contents |> sanitize_plain_text, language))
     ast.Heading(level, contents) ->
       contents
       |> list.map(inline_to_html(_, refs))
       |> result.all
-      |> result.map(fn(c) {
-        "<h"
-        <> int.to_string(level)
-        <> ">"
-        <> { c |> string.join("") }
-        <> "</h"
-        <> int.to_string(level)
-        <> ">\n"
-      })
+      |> result.map(header(_, level))
     ast.HorizontalBreak -> Ok("<hr />\n")
+    ast.HtmlBlock(html) -> Ok(html <> "\n")
+    ast.OrderedList(items, 1, _) ->
+      items
+      |> list.map(list_item_to_html(_, refs))
+      |> result.all
+      |> result.map(ol(_, None))
+    ast.OrderedList(items, start, _) ->
+      items
+      |> list.map(list_item_to_html(_, refs))
+      |> result.all
+      |> result.map(ol(_, Some(start)))
     ast.Paragraph(contents) if tight ->
       contents
       |> list.map(inline_to_html(_, refs))
@@ -217,36 +257,12 @@ pub fn block_to_html(
       contents
       |> list.map(inline_to_html(_, refs))
       |> result.all
-      |> result.map(fn(c) { "<p>" <> string.join(c, "") <> "</p>\n" })
-    ast.HtmlBlock(html) -> Ok(html <> "\n")
-    ast.BlockQuote(contents) ->
-      contents
-      |> list.map(block_to_html(_, refs, False))
-      |> result.all
-      |> result.map(fn(c) {
-        "<blockquote>\n" <> string.join(c, "") <> "</blockquote>\n"
-      })
-    ast.OrderedList(items, 1, _) ->
-      items
-      |> list.map(list_item_to_html(_, refs))
-      |> result.all
-      |> result.map(fn(c) { "<ol>\n" <> string.join(c, "") <> "</ol>\n" })
-    ast.OrderedList(items, start, _) ->
-      items
-      |> list.map(list_item_to_html(_, refs))
-      |> result.all
-      |> result.map(fn(c) {
-        "<ol start=\""
-        <> int.to_string(start)
-        <> "\">\n"
-        <> string.join(c, "")
-        <> "</ol>\n"
-      })
+      |> result.map(p)
     ast.UnorderedList(items, _) ->
       items
       |> list.map(list_item_to_html(_, refs))
       |> result.all
-      |> result.map(fn(c) { "<ul>\n" <> string.join(c, "") <> "</ul>\n" })
+      |> result.map(ul)
   }
 }
 
@@ -256,67 +272,23 @@ pub fn block_to_html_safe(
   tight: Bool,
 ) -> String {
   case block {
-    ast.CodeBlock(None, _, contents) ->
-      "<pre><code>" <> sanitize_plain_text(contents) <> "</code></pre>\n"
-    ast.CodeBlock(Some(info), _, contents) ->
-      "<pre><code class=\"language-"
-      <> info
-      <> "\">"
-      <> { contents |> sanitize_plain_text }
-      <> "</code></pre>\n"
+    ast.BlockQuote(contents) ->
+      blockquote(contents |> list.map(block_to_html_safe(_, refs, False)))
+    ast.CodeBlock(language, _, contents) ->
+      code(contents |> sanitize_plain_text, language)
     ast.Heading(level, contents) ->
-      "<h"
-      <> int.to_string(level)
-      <> ">"
-      <> {
-        contents |> list.map(inline_to_html_safe(_, refs)) |> string.join("")
-      }
-      <> "</h"
-      <> int.to_string(level)
-      <> ">\n"
+      header(contents |> list.map(inline_to_html_safe(_, refs)), level)
     ast.HorizontalBreak -> "<hr />\n"
+    ast.HtmlBlock(html) -> html <> "\n"
+    ast.OrderedList(items, 1, _) ->
+      ol(items |> list.map(list_item_to_html_safe(_, refs)), None)
+    ast.OrderedList(items, start, _) ->
+      ol(items |> list.map(list_item_to_html_safe(_, refs)), Some(start))
     ast.Paragraph(contents) if tight ->
       contents |> list.map(inline_to_html_safe(_, refs)) |> string.join("")
     ast.Paragraph(contents) ->
-      "<p>"
-      <> {
-        contents |> list.map(inline_to_html_safe(_, refs)) |> string.join("")
-      }
-      <> "</p>\n"
-    ast.HtmlBlock(html) -> html <> "\n"
-    ast.BlockQuote(contents) ->
-      "<blockquote>\n"
-      <> {
-        contents
-        |> list.map(block_to_html_safe(_, refs, False))
-        |> string.join("")
-      }
-      <> "</blockquote>\n"
-    ast.OrderedList(items, 1, _) ->
-      "<ol>\n"
-      <> {
-        items
-        |> list.map(list_item_to_html_safe(_, refs))
-        |> string.join("")
-      }
-      <> "</ol>\n"
-    ast.OrderedList(items, start, _) ->
-      "<ol start=\""
-      <> int.to_string(start)
-      <> "\">\n"
-      <> {
-        items
-        |> list.map(list_item_to_html_safe(_, refs))
-        |> string.join("")
-      }
-      <> "</ol>\n"
+      p(contents |> list.map(inline_to_html_safe(_, refs)))
     ast.UnorderedList(items, _) ->
-      "<ul>\n"
-      <> {
-        items
-        |> list.map(list_item_to_html_safe(_, refs))
-        |> string.join("")
-      }
-      <> "</ul>\n"
+      ul(items |> list.map(list_item_to_html_safe(_, refs)))
   }
 }
