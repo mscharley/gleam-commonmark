@@ -13,6 +13,10 @@ type InlineState {
   AutolinkAccumulator(List(String))
 }
 
+pub const replacement_char = 0xfffd
+
+pub const insecure_codepoints = [0]
+
 const ascii_punctuation = [
   "!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/",
   ":", ";", "<", "=", ">", "?", "@", "[", "]", "\\", "^", "_", "`", "{", "|",
@@ -20,9 +24,9 @@ const ascii_punctuation = [
 ]
 
 fn replace_null_byte(n) {
-  case n {
-    0 -> 0xfffd
-    _ -> n
+  case list.contains(insecure_codepoints, n) {
+    True -> 0xfffd
+    False -> n
   }
 }
 

@@ -5,6 +5,7 @@
 
 import commonmark/ast
 import commonmark/internal/parser/block.{parse_document}
+import commonmark/internal/parser/inline.{insecure_codepoints, replacement_char}
 import commonmark/internal/renderer/html
 import gleam/list
 import gleam/regex
@@ -14,10 +15,19 @@ import gleam/string
 /// Parse a CommonMark document into an AST.
 pub fn parse(document: String) -> ast.Document {
   let assert Ok(line_splitter) = regex.from_string("\r?\n|\r\n?")
+  let assert Ok(replacement_string) =
+    replacement_char
+    |> string.utf_codepoint
+    |> result.map(fn(x) { string.from_utf_codepoints([x]) })
 
   document
   // Security check [SPEC 2.3]
-  |> string.replace("\u{0000}", "\u{FFFD}")
+  |> list.fold(over: insecure_codepoints, with: fn(d, cp) {
+    string.utf_codepoint(cp)
+    |> result.map(fn(x) { string.from_utf_codepoints([x]) })
+    |> result.map(string.replace(_, in: d, with: replacement_string))
+    |> result.unwrap(d)
+  })
   |> regex.split(with: line_splitter)
   |> parse_document
 }

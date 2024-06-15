@@ -4,6 +4,15 @@ import commonmark/internal/parser/helpers
 import gleam/dict
 import startest/expect
 
+pub fn null_byte_test() {
+  "Hello\u{00}&#x0;&#0; world!\n"
+  |> commonmark.parse
+  |> expect.to_equal(ast.Document(
+    [ast.Paragraph([ast.PlainText("Hello\u{fffd}\u{fffd}\u{fffd} world!")])],
+    dict.new(),
+  ))
+}
+
 pub fn hello_world_test() {
   "Hello world!\n"
   |> commonmark.parse
