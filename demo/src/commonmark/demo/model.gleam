@@ -2,8 +2,8 @@ import commonmark
 import commonmark/ast.{type Document, Document}
 import lustre/effect
 
-const initial_document = "Hello, Gleam!
-=============
+const initial_document = "Hello, Gleam! 🩷
+================
 
 This is a handy little testing app for experimenting with CommonMark.
 
@@ -19,10 +19,12 @@ You can find the library powering this demo on [Github][commonmark-github], alon
 import gleam/io
 
 fn main () {
-  io.println(\"Hello world!\")
+  io.println(\"🚀 Hello world!\")
   Nil
 }
 ```
+
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ## Examples
 
@@ -34,6 +36,8 @@ fn main () {
 + Loose list 2
 
 > Something someone once said
+
+Math is fake: [1, 2, 3] &Element; &Zopf;
 "
 
 pub fn init(_flags) -> #(Model, effect.Effect(a)) {
