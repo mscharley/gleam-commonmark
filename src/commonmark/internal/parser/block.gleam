@@ -136,15 +136,24 @@ fn is_empty_line(l: String) -> Bool {
   { l |> trim_indent(4) } == ""
 }
 
+@target(erlang)
+const hr_regex_string = "^ {0,3}(?:([-*_]))(?:[ \t]*\\g{1}){2,}[ \t]*$"
+
+@target(javascript)
+const hr_regex_string = "^ {0,3}(?:([-*_]))(?:[ \t]*\\1){2,}[ \t]*$"
+
+@target(erlang)
+const fenced_code_start_regex_string = "^( {0,3})(([~`])\\g{3}{2,})[ \t]*(([^\\s]+).*?)?[ \t]*$"
+
+@target(javascript)
+const fenced_code_start_regex_string = "^( {0,3})(([~`])\\3{2,})[ \t]*(([^\\s]+).*?)?[ \t]*$"
+
 fn do_parse_blocks(
   state: BlockState,
   acc: List(BlockParseState),
   lines: List(String),
 ) -> List(BlockParseState) {
-  let assert Ok(hr_regex) =
-    regex.from_string(
-      "^ {0,3}(?:\\*[* \t]*\\*[* \t]*\\*|-[- \t]*-[- \t]*-|_[_ \t]*_[_ \t]*_)[ \t]*$",
-    )
+  let assert Ok(hr_regex) = regex.from_string(hr_regex_string)
   let assert Ok(atx_header_regex) =
     regex.from_string("^ {0,3}(#{1,6})([ \t]+.*?)?(?:(?<=[ \t])#*)?[ \t]*$")
   let assert Ok(setext_header_regex) =
@@ -152,7 +161,7 @@ fn do_parse_blocks(
   let assert Ok(fenced_code_regex) = case state {
     FencedCodeBlockBuilder(break, _, _, _, _) ->
       regex.from_string("^ {0,3}" <> break <> "+[ \t]*$")
-    _ -> regex.from_string("^( {0,3})([~`]{3,})[ \t]*(([^\\s]+).*?)?[ \t]*$")
+    _ -> regex.from_string(fenced_code_start_regex_string)
   }
   let assert Ok(valid_indented_code_regex) =
     regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
@@ -686,7 +695,7 @@ fn do_parse_blocks(
     // Fenced code blocks
     ParagraphBuilder(bs), [_, ..ls] if is_fenced_code_block ->
       case fenced_code_results {
-        Ok([indent, Some(exit)]) ->
+        Ok([indent, Some(exit), _]) ->
           do_parse_blocks(
             FencedCodeBlockBuilder(
               exit,
@@ -698,7 +707,7 @@ fn do_parse_blocks(
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
           )
-        Ok([indent, Some(exit), full_info, info]) ->
+        Ok([indent, Some(exit), _, full_info, info]) ->
           do_parse_blocks(
             FencedCodeBlockBuilder(
               exit,
@@ -718,7 +727,7 @@ fn do_parse_blocks(
       }
     OutsideBlock, [_, ..ls] if is_fenced_code_block ->
       case fenced_code_results {
-        Ok([indent, Some(exit)]) ->
+        Ok([indent, Some(exit), _]) ->
           do_parse_blocks(
             FencedCodeBlockBuilder(
               exit,
@@ -730,7 +739,7 @@ fn do_parse_blocks(
             acc,
             ls,
           )
-        Ok([indent, Some(exit), full_info, info]) ->
+        Ok([indent, Some(exit), _, full_info, info]) ->
           do_parse_blocks(
             FencedCodeBlockBuilder(
               exit,

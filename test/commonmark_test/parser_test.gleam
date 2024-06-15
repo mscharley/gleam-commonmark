@@ -70,3 +70,7 @@ pub fn trim_indent_tab3_test() {
 pub fn trim_indent_tab4_test() {
   "\t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
 }
+
+pub fn trim_indent_midtab_test() {
+  "\t\t\tfoo" |> helpers.trim_indent(6) |> expect.to_equal("  \tfoo")
+}
