@@ -12,6 +12,7 @@
 import gleam/dict.{type Dict}
 import gleam/option.{type Option}
 
+/// The emphasis marker used to generate an emphasis inline element.
 pub type EmphasisMarker {
   AsteriskEmphasisMarker
   UnderscoreEmphasisMarker
@@ -44,24 +45,33 @@ pub type InlineNode {
   SoftLineBreak
 }
 
+/// Represents a single item in a list.
+///
+/// Standardised markdown rendering should not output paragraph tags inside a tight list item. The
+/// intention here is to try to mirror the visual style of the original document, where tight items
+/// are grouped together tightly.
 pub type ListItem {
+  /// A "loose" list item.
   ListItem(contents: List(BlockNode))
+  /// A "tight" list item.
   TightListItem(contents: List(BlockNode))
 }
 
+/// The list marker used to define an ordered list.
 pub type OrderedListMarker {
-  /// The list used a `.` as the marker for the ordered list
+  /// The list used a `.` as the marker for the ordered list.
   PeriodListMarker
-  /// The list used a `)` as the marker for the ordered list
+  /// The list used a `)` as the marker for the ordered list.
   BracketListMarker
 }
 
+/// The list marker used to define an unordered list.
 pub type UnorderedListMarker {
-  /// The list used a `-` as the marker for the unordered list
+  /// The list used a `-` as the marker for the unordered list.
   DashListMarker
-  /// The list used a `+` as the marker for the unordered list
+  /// The list used a `+` as the marker for the unordered list.
   PlusListMarker
-  /// The list used a `*` as the marker for the unordered list
+  /// The list used a `*` as the marker for the unordered list.
   AsteriskListMarker
 }
 
@@ -77,12 +87,12 @@ pub type BlockNode {
   UnorderedList(contents: List(ListItem), marker: UnorderedListMarker)
 }
 
-/// A reference used with ReferenceLink nodes
+/// A reference used with ReferenceLink nodes.
 pub type Reference {
   Reference(href: String, title: Option(String))
 }
 
-/// A dictionary of references keyed by the name of the reference
+/// A dictionary of references keyed by the name of the reference.
 pub type ReferenceList =
   Dict(String, Reference)
 
@@ -90,4 +100,10 @@ pub type ReferenceList =
 /// metadata.
 pub type Document {
   Document(blocks: List(BlockNode), references: ReferenceList)
+}
+
+/// Errors that can occur while rendering.
+pub type RenderError {
+  /// There was a link or image that points to a reference which doesn't exist.
+  MissingReference(reference: String)
 }

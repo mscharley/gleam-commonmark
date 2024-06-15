@@ -8,6 +8,7 @@ import commonmark/internal/parser/block.{parse_document}
 import commonmark/internal/renderer/html
 import gleam/list
 import gleam/regex
+import gleam/result
 import gleam/string
 
 /// Parse a CommonMark document into an AST.
@@ -26,18 +27,18 @@ pub fn parse(document: String) -> ast.Document {
 /// This version follows the advice in the CommonMark spec to silently resolve errors.
 pub fn to_html(document: ast.Document) -> String {
   document.blocks
-  |> list.map(html.block_to_html(_, document.references, False))
+  |> list.map(html.block_to_html_safe(_, document.references, False))
   |> string.join("")
 }
 
 /// Render an AST into a HTML string.
 ///
 /// This uses a more strict rendered that won't attempt to fix issues in the document.
-pub fn to_html_strict(document: ast.Document) -> Result(String, Nil) {
+pub fn to_html_strict(document: ast.Document) -> Result(String, ast.RenderError) {
   document.blocks
   |> list.map(html.block_to_html(_, document.references, False))
-  |> string.join("")
-  |> Ok
+  |> result.all
+  |> result.map(string.join(_, ""))
 }
 
 /// Render a CommonMark document into a HTML string.
@@ -50,6 +51,8 @@ pub fn render_to_html(document: String) -> String {
 /// Render a CommonMark document into a HTML string.
 ///
 /// This uses a more strict rendering that won't attempt to fix issues in the document.
-pub fn render_to_html_strict(document: String) -> Result(String, Nil) {
+pub fn render_to_html_strict(
+  document: String,
+) -> Result(String, ast.RenderError) {
   document |> parse |> to_html_strict
 }
