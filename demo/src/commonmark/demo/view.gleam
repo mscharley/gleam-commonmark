@@ -106,6 +106,7 @@ pub fn view(model: Model) -> element.Element(Msg) {
                 model.Preview ->
                   ui.prose(
                     [
+                      attribute.style([#("width", "100%")]),
                       attribute.attribute(
                         "dangerous-unescaped-html",
                         model.html,
