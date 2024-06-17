@@ -203,7 +203,7 @@ This is a test."
         ]),
         TightListItem([
           Paragraph([
-            PlainText("❌ Strikethrough"),
+            PlainText("✅ Strikethrough"),
           ]),
         ]),
       ],

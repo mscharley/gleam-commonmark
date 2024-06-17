@@ -71,7 +71,7 @@ Raw HTML features will be tackled last as the potential security issues around t
 The current version of GFM targetted is [0.29-gfm][gfm].
 
 * ❌ Tables
-* ❌ Strikethrough
+* ✅ Strikethrough
 
 [gfm]: https://github.github.com/gfm/
 
