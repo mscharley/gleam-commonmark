@@ -51,7 +51,7 @@ The current version of CommonMark targetted is [0.31.2][commonmark].
 * ✅ Block quotes
 * 🚧 Ordered lists
 * 🚧 Unordered lists
-* ❌ Code spans
+* ✅ Code spans
 * ❌ Emphasis and strong emphasis
 * ❌ Links
 * ❌ Images

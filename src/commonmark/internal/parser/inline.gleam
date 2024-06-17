@@ -3,7 +3,7 @@ import commonmark/internal/parser/entity
 import gleam/int
 import gleam/list
 import gleam/option.{Some}
-import gleam/regex
+import gleam/regex.{Match}
 import gleam/result
 import gleam/string
 
@@ -12,6 +12,8 @@ type InlineLexer {
   Text(String)
   LessThan
   GreaterThan
+  Backtick
+  Tilde
   SoftLineBreak
   HardLineBreak(String)
 }
@@ -20,6 +22,8 @@ type InlineWrapper {
   LexedElement(InlineLexer)
   EmailAutolink(List(InlineWrapper))
   UriAutolink(List(InlineWrapper))
+  BacktickString(Int)
+  CodeSpan(Int, List(InlineWrapper))
 }
 
 pub const replacement_char = 0xfffd
@@ -45,7 +49,14 @@ fn to_string(el: InlineWrapper) {
     LexedElement(Escaped(s)) -> "\\" <> s
     LexedElement(LessThan) -> "<"
     LexedElement(GreaterThan) -> ">"
+    LexedElement(Backtick) -> "`"
+    LexedElement(Tilde) -> "~"
     LexedElement(SoftLineBreak) -> "\n"
+    BacktickString(count) -> string.repeat("`", count)
+    CodeSpan(count, content) ->
+      string.repeat("`", count)
+      <> list_to_string(content)
+      <> string.repeat("`", count)
     EmailAutolink(ls) -> "<" <> list_to_string(ls) <> ">"
     UriAutolink(ls) -> "<" <> list_to_string(ls) <> ">"
   }
@@ -114,7 +125,7 @@ fn match_entity(input: List(String)) -> Result(#(List(String), String), Nil) {
   })
 }
 
-pub fn parse_autolink(href: List(InlineWrapper)) -> Result(InlineWrapper, Nil) {
+fn parse_autolink(href: List(InlineWrapper)) -> Result(InlineWrapper, Nil) {
   // Borrowed direct from the spec
   let assert Ok(email_regex) =
     regex.from_string(
@@ -131,13 +142,26 @@ pub fn parse_autolink(href: List(InlineWrapper)) -> Result(InlineWrapper, Nil) {
   }
 }
 
+fn parse_code_span(
+  size: Int,
+  previous: List(InlineWrapper),
+) -> List(InlineWrapper) {
+  case list.split_while(previous, fn(n) { n != BacktickString(size) }) {
+    #(_, []) -> [BacktickString(size), ..previous]
+    #(wrapped, [_, ..rest]) -> [CodeSpan(size, list.reverse(wrapped)), ..rest]
+  }
+}
+
 fn lex_inline_text(
   input: List(String),
   text: List(String),
   acc: List(InlineLexer),
 ) -> List(InlineLexer) {
   case input {
-    [] -> [Text(text |> list.reverse |> string.join("")), ..acc] |> list.reverse
+    [] ->
+      [Text(text |> list.reverse |> string.join("")), ..acc]
+      |> list.filter(fn(x) { x != Text("") })
+      |> list.reverse
     ["<", ..xs] ->
       lex_inline_text(xs, [], [
         LessThan,
@@ -147,6 +171,18 @@ fn lex_inline_text(
     [">", ..xs] ->
       lex_inline_text(xs, [], [
         GreaterThan,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["`", ..xs] ->
+      lex_inline_text(xs, [], [
+        Backtick,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["~", ..xs] ->
+      lex_inline_text(xs, [], [
+        Tilde,
         Text(text |> list.reverse |> string.join("")),
         ..acc
       ])
@@ -206,15 +242,33 @@ fn parse_inline_wrappers(
       case list.split_while(acc, is_not_less_than) {
         #(_, []) ->
           parse_inline_wrappers(ls, [LexedElement(GreaterThan), ..acc])
-        #(to_wrap, rest) ->
+        #(to_wrap, [_, ..rest]) ->
           case parse_autolink(to_wrap |> list.reverse) {
-            Ok(wrapped) ->
-              parse_inline_wrappers(ls, [wrapped, ..list.drop(rest, 1)])
+            Ok(wrapped) -> parse_inline_wrappers(ls, [wrapped, ..rest])
             Error(_) ->
               parse_inline_wrappers(ls, [LexedElement(GreaterThan), ..acc])
           }
       }
-    [Escaped(_) as v, ..ls]
+    [Backtick, Backtick, ..ls] ->
+      case list.first(acc) {
+        Ok(BacktickString(count)) ->
+          parse_inline_wrappers([Backtick, ..ls], [
+            BacktickString(count + 1),
+            ..acc
+          ])
+        _ -> parse_inline_wrappers([Backtick, ..ls], [BacktickString(1), ..acc])
+      }
+    [Backtick, ..ls] -> {
+      let acc = case list.first(acc) {
+        Ok(BacktickString(count)) ->
+          parse_code_span(count + 1, list.drop(acc, 1))
+        _ -> parse_code_span(1, acc)
+      }
+
+      parse_inline_wrappers(ls, acc)
+    }
+    [Tilde as v, ..ls]
+    | [Escaped(_) as v, ..ls]
     | [LessThan as v, ..ls]
     | [HardLineBreak(_) as v, ..ls]
     | [SoftLineBreak as v, ..ls]
@@ -234,12 +288,28 @@ fn parse_inline_ast(
       parse_inline_ast(ws, [ast.EmailAutolink(list_to_string(l)), ..acc])
     [UriAutolink(l), ..ws] ->
       parse_inline_ast(ws, [ast.UriAutolink(list_to_string(l)), ..acc])
+    [BacktickString(count), ..ws] ->
+      parse_inline_ast(ws, [ast.PlainText(string.repeat("`", count)), ..acc])
+    [CodeSpan(_, contents), ..ws] -> {
+      let assert Ok(r) = regex.from_string("^ (.*) $")
+      let c = contents |> list_to_string |> string.replace("\n", " ")
+
+      case regex.scan(r, c) {
+        [Match(_, [Some(span)])] ->
+          parse_inline_ast(ws, [ast.CodeSpan(span), ..acc])
+        _ -> parse_inline_ast(ws, [ast.CodeSpan(c), ..acc])
+      }
+    }
     [LexedElement(Escaped(s)), ..ws] ->
       parse_inline_ast(ws, [ast.PlainText(s), ..acc])
     [LexedElement(SoftLineBreak), ..ws] ->
       parse_inline_ast(ws, [ast.SoftLineBreak, ..acc])
     [LexedElement(HardLineBreak(_)), ..ws] ->
       parse_inline_ast(ws, [ast.HardLineBreak, ..acc])
+    [LexedElement(Backtick), ..ws] ->
+      parse_inline_ast([LexedElement(Text("`")), ..ws], acc)
+    [LexedElement(Tilde), ..ws] ->
+      parse_inline_ast([LexedElement(Text("~")), ..ws], acc)
     [LexedElement(GreaterThan), ..ws] ->
       parse_inline_ast([LexedElement(Text(">")), ..ws], acc)
     [LexedElement(LessThan), ..ws] ->
