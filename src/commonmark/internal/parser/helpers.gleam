@@ -1,7 +1,6 @@
 import commonmark/ast
 import gleam/int
 import gleam/option.{type Option, None, Some}
-import gleam/regex
 import gleam/string
 
 pub const tab_stop = "(?: {0,3}\t|    )"
@@ -55,20 +54,5 @@ pub fn determine_indent(indent: Option(String)) -> Int {
   case indent {
     None -> 0
     Some(s) -> string.length(s)
-  }
-}
-
-pub fn parse_autolink(href: String) -> ast.InlineNode {
-  // Borrowed direct from the spec
-  let assert Ok(email_regex) =
-    regex.from_string(
-      "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
-    )
-  let assert Ok(uri_regex) = regex.from_string("^[a-zA-Z][-a-zA-Z+.]{1,31}:")
-
-  case regex.check(email_regex, href), regex.check(uri_regex, href) {
-    True, _ -> ast.EmailAutolink(href)
-    _, True -> ast.UriAutolink(href)
-    False, False -> ast.PlainText("<" <> href <> ">")
   }
 }
