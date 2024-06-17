@@ -23,7 +23,9 @@ type InlineWrapper {
   EmailAutolink(List(InlineWrapper))
   UriAutolink(List(InlineWrapper))
   BacktickString(Int)
+  TildeString(Int)
   CodeSpan(Int, List(InlineWrapper))
+  Strikethrough(Int, List(InlineWrapper))
 }
 
 pub const replacement_char = 0xfffd
@@ -57,6 +59,11 @@ fn to_string(el: InlineWrapper) {
       string.repeat("`", count)
       <> list_to_string(content)
       <> string.repeat("`", count)
+    TildeString(count) -> string.repeat("~", count)
+    Strikethrough(count, content) ->
+      string.repeat("~", count)
+      <> list_to_string(content)
+      <> string.repeat("~", count)
     EmailAutolink(ls) -> "<" <> list_to_string(ls) <> ">"
     UriAutolink(ls) -> "<" <> list_to_string(ls) <> ">"
   }
@@ -64,34 +71,6 @@ fn to_string(el: InlineWrapper) {
 
 fn list_to_string(els: List(InlineWrapper)) {
   list.map(els, to_string) |> string.join("")
-}
-
-fn trim_left(x: String) -> String {
-  case x {
-    " " <> x -> trim_left(x)
-    "\t" <> x -> trim_left(x)
-    _ -> x
-  }
-}
-
-fn trim_right(x: String) -> String {
-  x |> string.reverse |> trim_left |> string.reverse
-}
-
-fn finalise_plain_text(ast: List(ast.InlineNode), acc: List(ast.InlineNode)) {
-  case ast, acc {
-    [], [ast.PlainText(y), ..ys] ->
-      [ast.PlainText(trim_right(y)), ..ys] |> list.reverse
-    [], _ -> acc |> list.reverse
-    [ast.PlainText(x), ..xs], [ast.PlainText(y), ..ys] ->
-      finalise_plain_text(xs, [ast.PlainText(y <> x), ..ys])
-    [ast.PlainText(x), ..xs], _ ->
-      finalise_plain_text(xs, [ast.PlainText(trim_left(x)), ..acc])
-    [ast.HardLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
-    | [ast.SoftLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
-    -> finalise_plain_text(xs, [x, ast.PlainText(trim_right(y)), ..ys])
-    [x, ..xs], _ -> finalise_plain_text(xs, [x, ..acc])
-  }
 }
 
 fn translate_numerical_entity(
@@ -149,6 +128,19 @@ fn parse_code_span(
   case list.split_while(previous, fn(n) { n != BacktickString(size) }) {
     #(_, []) -> [BacktickString(size), ..previous]
     #(wrapped, [_, ..rest]) -> [CodeSpan(size, list.reverse(wrapped)), ..rest]
+  }
+}
+
+fn parse_strikethrough(
+  size: Int,
+  previous: List(InlineWrapper),
+) -> List(InlineWrapper) {
+  case list.split_while(previous, fn(n) { n != TildeString(size) }) {
+    #(_, []) -> [TildeString(size), ..previous]
+    #(wrapped, [_, ..rest]) -> [
+      Strikethrough(size, list.reverse(wrapped)),
+      ..rest
+    ]
   }
 }
 
@@ -254,7 +246,7 @@ fn parse_inline_wrappers(
         Ok(BacktickString(count)) ->
           parse_inline_wrappers([Backtick, ..ls], [
             BacktickString(count + 1),
-            ..acc
+            ..list.drop(acc, 1)
           ])
         _ -> parse_inline_wrappers([Backtick, ..ls], [BacktickString(1), ..acc])
       }
@@ -267,8 +259,27 @@ fn parse_inline_wrappers(
 
       parse_inline_wrappers(ls, acc)
     }
-    [Tilde as v, ..ls]
-    | [Escaped(_) as v, ..ls]
+    [Tilde, Tilde, ..ls] ->
+      case list.first(acc) {
+        Ok(TildeString(count)) ->
+          parse_inline_wrappers([Tilde, ..ls], [
+            TildeString(count + 1),
+            ..list.drop(acc, 1)
+          ])
+        _ -> parse_inline_wrappers([Tilde, ..ls], [TildeString(1), ..acc])
+      }
+    [Tilde, ..ls] -> {
+      let #(count, acc) = case list.first(acc) {
+        Ok(TildeString(count)) -> #(count + 1, list.drop(acc, 1))
+        _ -> #(1, acc)
+      }
+
+      case count <= 2 {
+        True -> parse_inline_wrappers(ls, parse_strikethrough(count, acc))
+        False -> parse_inline_wrappers(ls, [TildeString(count), ..acc])
+      }
+    }
+    [Escaped(_) as v, ..ls]
     | [LessThan as v, ..ls]
     | [HardLineBreak(_) as v, ..ls]
     | [SoftLineBreak as v, ..ls]
@@ -300,6 +311,13 @@ fn parse_inline_ast(
         _ -> parse_inline_ast(ws, [ast.CodeSpan(c), ..acc])
       }
     }
+    [TildeString(count), ..ws] ->
+      parse_inline_ast(ws, [ast.PlainText(string.repeat("~", count)), ..acc])
+    [Strikethrough(_, contents), ..ws] ->
+      parse_inline_ast(ws, [
+        ast.StrikeThrough(parse_inline_ast(contents, [])),
+        ..acc
+      ])
     [LexedElement(Escaped(s)), ..ws] ->
       parse_inline_ast(ws, [ast.PlainText(s), ..acc])
     [LexedElement(SoftLineBreak), ..ws] ->
@@ -316,6 +334,36 @@ fn parse_inline_ast(
       parse_inline_ast([LexedElement(Text("<")), ..ws], acc)
     [LexedElement(Text(t)), ..ws] ->
       parse_inline_ast(ws, [ast.PlainText(t), ..acc])
+  }
+}
+
+fn trim_left(x: String) -> String {
+  case x {
+    " " <> x -> trim_left(x)
+    "\t" <> x -> trim_left(x)
+    _ -> x
+  }
+}
+
+fn trim_right(x: String) -> String {
+  x |> string.reverse |> trim_left |> string.reverse
+}
+
+fn finalise_plain_text(ast: List(ast.InlineNode), acc: List(ast.InlineNode)) {
+  case ast, acc {
+    [], [ast.PlainText(y), ..ys] ->
+      [ast.PlainText(trim_right(y)), ..ys] |> list.reverse
+    [], _ -> acc |> list.reverse
+    [ast.PlainText(x), ..xs], [ast.PlainText(y), ..ys] ->
+      finalise_plain_text(xs, [ast.PlainText(y <> x), ..ys])
+    [ast.PlainText(x), ..xs], []
+    | [ast.PlainText(x), ..xs], [ast.HardLineBreak, ..]
+    | [ast.PlainText(x), ..xs], [ast.SoftLineBreak, ..]
+    -> finalise_plain_text(xs, [ast.PlainText(trim_left(x)), ..acc])
+    [ast.HardLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
+    | [ast.SoftLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
+    -> finalise_plain_text(xs, [x, ast.PlainText(trim_right(y)), ..ys])
+    [x, ..xs], _ -> finalise_plain_text(xs, [x, ..acc])
   }
 }
 
