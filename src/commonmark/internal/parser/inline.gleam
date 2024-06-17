@@ -55,18 +55,30 @@ fn list_to_string(els: List(InlineWrapper)) {
   list.map(els, to_string) |> string.join("")
 }
 
+fn trim_left(x: String) -> String {
+  case x {
+    " " <> x -> trim_left(x)
+    "\t" <> x -> trim_left(x)
+    _ -> x
+  }
+}
+
+fn trim_right(x: String) -> String {
+  x |> string.reverse |> trim_left |> string.reverse
+}
+
 fn finalise_plain_text(ast: List(ast.InlineNode), acc: List(ast.InlineNode)) {
   case ast, acc {
     [], [ast.PlainText(y), ..ys] ->
-      [ast.PlainText(string.trim_right(y)), ..ys] |> list.reverse
+      [ast.PlainText(trim_right(y)), ..ys] |> list.reverse
     [], _ -> acc |> list.reverse
     [ast.PlainText(x), ..xs], [ast.PlainText(y), ..ys] ->
       finalise_plain_text(xs, [ast.PlainText(y <> x), ..ys])
     [ast.PlainText(x), ..xs], _ ->
-      finalise_plain_text(xs, [ast.PlainText(string.trim_left(x)), ..acc])
+      finalise_plain_text(xs, [ast.PlainText(trim_left(x)), ..acc])
     [ast.HardLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
     | [ast.SoftLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
-    -> finalise_plain_text(xs, [x, ast.PlainText(string.trim_right(y)), ..ys])
+    -> finalise_plain_text(xs, [x, ast.PlainText(trim_right(y)), ..ys])
     [x, ..xs], _ -> finalise_plain_text(xs, [x, ..acc])
   }
 }
