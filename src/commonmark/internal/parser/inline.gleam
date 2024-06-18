@@ -14,6 +14,8 @@ type InlineLexer {
   GreaterThan
   Backtick
   Tilde
+  Asterisk
+  Underscore
   SoftLineBreak
   HardLineBreak(String)
 }
@@ -53,6 +55,8 @@ fn to_string(el: InlineWrapper) {
     LexedElement(GreaterThan) -> ">"
     LexedElement(Backtick) -> "`"
     LexedElement(Tilde) -> "~"
+    LexedElement(Asterisk) -> "*"
+    LexedElement(Underscore) -> "_"
     LexedElement(SoftLineBreak) -> "\n"
     BacktickString(count) -> string.repeat("`", count)
     CodeSpan(count, content) ->
@@ -144,7 +148,7 @@ fn parse_strikethrough(
   }
 }
 
-fn lex_inline_text(
+fn do_lex_inline_text(
   input: List(String),
   text: List(String),
   acc: List(InlineLexer),
@@ -155,43 +159,55 @@ fn lex_inline_text(
       |> list.filter(fn(x) { x != Text("") })
       |> list.reverse
     ["<", ..xs] ->
-      lex_inline_text(xs, [], [
+      do_lex_inline_text(xs, [], [
         LessThan,
         Text(text |> list.reverse |> string.join("")),
         ..acc
       ])
     [">", ..xs] ->
-      lex_inline_text(xs, [], [
+      do_lex_inline_text(xs, [], [
         GreaterThan,
         Text(text |> list.reverse |> string.join("")),
         ..acc
       ])
     ["`", ..xs] ->
-      lex_inline_text(xs, [], [
+      do_lex_inline_text(xs, [], [
         Backtick,
         Text(text |> list.reverse |> string.join("")),
         ..acc
       ])
     ["~", ..xs] ->
-      lex_inline_text(xs, [], [
+      do_lex_inline_text(xs, [], [
         Tilde,
         Text(text |> list.reverse |> string.join("")),
         ..acc
       ])
+    ["_", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        Underscore,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["*", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        Asterisk,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
     ["\\", "\n", ..xs] ->
-      lex_inline_text(xs, [], [
+      do_lex_inline_text(xs, [], [
         HardLineBreak("\\\n"),
         Text(text |> list.reverse |> string.join("")),
         ..acc
       ])
     [" ", " ", "\n", ..xs] ->
-      lex_inline_text(xs, [], [
+      do_lex_inline_text(xs, [], [
         HardLineBreak("  \n"),
         Text(text |> list.reverse |> string.join("")),
         ..acc
       ])
     ["\n", ..xs] ->
-      lex_inline_text(xs, [], [
+      do_lex_inline_text(xs, [], [
         SoftLineBreak,
         Text(text |> list.reverse |> string.join("")),
         ..acc
@@ -199,20 +215,20 @@ fn lex_inline_text(
     ["&", ..xs] ->
       case match_entity(xs) {
         Ok(#(rest, replacement)) ->
-          lex_inline_text(rest, [replacement, ..text], acc)
-        Error(_) -> lex_inline_text(xs, ["&", ..text], acc)
+          do_lex_inline_text(rest, [replacement, ..text], acc)
+        Error(_) -> do_lex_inline_text(xs, ["&", ..text], acc)
       }
     ["\\", g, ..xs] ->
       case list.contains(ascii_punctuation, g) {
         True ->
-          lex_inline_text(xs, [], [
+          do_lex_inline_text(xs, [], [
             Escaped(g),
             Text(text |> list.reverse |> string.join("")),
             ..acc
           ])
-        False -> lex_inline_text(xs, [g, "\\", ..text], acc)
+        False -> do_lex_inline_text(xs, [g, "\\", ..text], acc)
       }
-    [x, ..xs] -> lex_inline_text(xs, [x, ..text], acc)
+    [x, ..xs] -> do_lex_inline_text(xs, [x, ..text], acc)
   }
 }
 
@@ -223,7 +239,7 @@ fn is_not_less_than(v: InlineWrapper) -> Bool {
   }
 }
 
-fn parse_inline_wrappers(
+fn do_parse_inline_wrappers(
   lexed: List(InlineLexer),
   acc: List(InlineWrapper),
 ) -> List(InlineWrapper) {
@@ -233,22 +249,23 @@ fn parse_inline_wrappers(
     [GreaterThan, ..ls] ->
       case list.split_while(acc, is_not_less_than) {
         #(_, []) ->
-          parse_inline_wrappers(ls, [LexedElement(GreaterThan), ..acc])
+          do_parse_inline_wrappers(ls, [LexedElement(GreaterThan), ..acc])
         #(to_wrap, [_, ..rest]) ->
           case parse_autolink(to_wrap |> list.reverse) {
-            Ok(wrapped) -> parse_inline_wrappers(ls, [wrapped, ..rest])
+            Ok(wrapped) -> do_parse_inline_wrappers(ls, [wrapped, ..rest])
             Error(_) ->
-              parse_inline_wrappers(ls, [LexedElement(GreaterThan), ..acc])
+              do_parse_inline_wrappers(ls, [LexedElement(GreaterThan), ..acc])
           }
       }
     [Backtick, Backtick, ..ls] ->
       case list.first(acc) {
         Ok(BacktickString(count)) ->
-          parse_inline_wrappers([Backtick, ..ls], [
+          do_parse_inline_wrappers([Backtick, ..ls], [
             BacktickString(count + 1),
             ..list.drop(acc, 1)
           ])
-        _ -> parse_inline_wrappers([Backtick, ..ls], [BacktickString(1), ..acc])
+        _ ->
+          do_parse_inline_wrappers([Backtick, ..ls], [BacktickString(1), ..acc])
       }
     [Backtick, ..ls] -> {
       let acc = case list.first(acc) {
@@ -257,16 +274,16 @@ fn parse_inline_wrappers(
         _ -> parse_code_span(1, acc)
       }
 
-      parse_inline_wrappers(ls, acc)
+      do_parse_inline_wrappers(ls, acc)
     }
     [Tilde, Tilde, ..ls] ->
       case list.first(acc) {
         Ok(TildeString(count)) ->
-          parse_inline_wrappers([Tilde, ..ls], [
+          do_parse_inline_wrappers([Tilde, ..ls], [
             TildeString(count + 1),
             ..list.drop(acc, 1)
           ])
-        _ -> parse_inline_wrappers([Tilde, ..ls], [TildeString(1), ..acc])
+        _ -> do_parse_inline_wrappers([Tilde, ..ls], [TildeString(1), ..acc])
       }
     [Tilde, ..ls] -> {
       let #(count, acc) = case list.first(acc) {
@@ -275,20 +292,22 @@ fn parse_inline_wrappers(
       }
 
       case count <= 2 {
-        True -> parse_inline_wrappers(ls, parse_strikethrough(count, acc))
-        False -> parse_inline_wrappers(ls, [TildeString(count), ..acc])
+        True -> do_parse_inline_wrappers(ls, parse_strikethrough(count, acc))
+        False -> do_parse_inline_wrappers(ls, [TildeString(count), ..acc])
       }
     }
-    [Escaped(_) as v, ..ls]
+    [Asterisk as v, ..ls]
+    | [Underscore as v, ..ls]
+    | [Escaped(_) as v, ..ls]
     | [LessThan as v, ..ls]
     | [HardLineBreak(_) as v, ..ls]
     | [SoftLineBreak as v, ..ls]
     | [Text(_) as v, ..ls] ->
-      parse_inline_wrappers(ls, [LexedElement(v), ..acc])
+      do_parse_inline_wrappers(ls, [LexedElement(v), ..acc])
   }
 }
 
-fn parse_inline_ast(
+fn do_parse_inline_ast(
   wrapped: List(InlineWrapper),
   acc: List(ast.InlineNode),
 ) -> List(ast.InlineNode) {
@@ -296,44 +315,48 @@ fn parse_inline_ast(
     // Intentionally not reversed as our input is reversed coming from the parse_inline_wrappers step
     [] -> acc
     [EmailAutolink(l), ..ws] ->
-      parse_inline_ast(ws, [ast.EmailAutolink(list_to_string(l)), ..acc])
+      do_parse_inline_ast(ws, [ast.EmailAutolink(list_to_string(l)), ..acc])
     [UriAutolink(l), ..ws] ->
-      parse_inline_ast(ws, [ast.UriAutolink(list_to_string(l)), ..acc])
+      do_parse_inline_ast(ws, [ast.UriAutolink(list_to_string(l)), ..acc])
     [BacktickString(count), ..ws] ->
-      parse_inline_ast(ws, [ast.PlainText(string.repeat("`", count)), ..acc])
+      do_parse_inline_ast(ws, [ast.PlainText(string.repeat("`", count)), ..acc])
     [CodeSpan(_, contents), ..ws] -> {
       let assert Ok(r) = regex.from_string("^ (.*) $")
       let c = contents |> list_to_string |> string.replace("\n", " ")
 
       case regex.scan(r, c) {
         [Match(_, [Some(span)])] ->
-          parse_inline_ast(ws, [ast.CodeSpan(span), ..acc])
-        _ -> parse_inline_ast(ws, [ast.CodeSpan(c), ..acc])
+          do_parse_inline_ast(ws, [ast.CodeSpan(span), ..acc])
+        _ -> do_parse_inline_ast(ws, [ast.CodeSpan(c), ..acc])
       }
     }
     [TildeString(count), ..ws] ->
-      parse_inline_ast(ws, [ast.PlainText(string.repeat("~", count)), ..acc])
+      do_parse_inline_ast(ws, [ast.PlainText(string.repeat("~", count)), ..acc])
     [Strikethrough(_, contents), ..ws] ->
-      parse_inline_ast(ws, [
-        ast.StrikeThrough(parse_inline_ast(contents, [])),
+      do_parse_inline_ast(ws, [
+        ast.StrikeThrough(do_parse_inline_ast(contents, [])),
         ..acc
       ])
     [LexedElement(Escaped(s)), ..ws] ->
-      parse_inline_ast(ws, [ast.PlainText(s), ..acc])
+      do_parse_inline_ast(ws, [ast.PlainText(s), ..acc])
     [LexedElement(SoftLineBreak), ..ws] ->
-      parse_inline_ast(ws, [ast.SoftLineBreak, ..acc])
+      do_parse_inline_ast(ws, [ast.SoftLineBreak, ..acc])
     [LexedElement(HardLineBreak(_)), ..ws] ->
-      parse_inline_ast(ws, [ast.HardLineBreak, ..acc])
+      do_parse_inline_ast(ws, [ast.HardLineBreak, ..acc])
+    [LexedElement(Asterisk), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text("*")), ..ws], acc)
+    [LexedElement(Underscore), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text("_")), ..ws], acc)
     [LexedElement(Backtick), ..ws] ->
-      parse_inline_ast([LexedElement(Text("`")), ..ws], acc)
+      do_parse_inline_ast([LexedElement(Text("`")), ..ws], acc)
     [LexedElement(Tilde), ..ws] ->
-      parse_inline_ast([LexedElement(Text("~")), ..ws], acc)
+      do_parse_inline_ast([LexedElement(Text("~")), ..ws], acc)
     [LexedElement(GreaterThan), ..ws] ->
-      parse_inline_ast([LexedElement(Text(">")), ..ws], acc)
+      do_parse_inline_ast([LexedElement(Text(">")), ..ws], acc)
     [LexedElement(LessThan), ..ws] ->
-      parse_inline_ast([LexedElement(Text("<")), ..ws], acc)
+      do_parse_inline_ast([LexedElement(Text("<")), ..ws], acc)
     [LexedElement(Text(t)), ..ws] ->
-      parse_inline_ast(ws, [ast.PlainText(t), ..acc])
+      do_parse_inline_ast(ws, [ast.PlainText(t), ..acc])
   }
 }
 
@@ -349,29 +372,29 @@ fn trim_right(x: String) -> String {
   x |> string.reverse |> trim_left |> string.reverse
 }
 
-fn finalise_plain_text(ast: List(ast.InlineNode), acc: List(ast.InlineNode)) {
+fn do_finalise_plain_text(ast: List(ast.InlineNode), acc: List(ast.InlineNode)) {
   case ast, acc {
     [], [ast.PlainText(y), ..ys] ->
       [ast.PlainText(trim_right(y)), ..ys] |> list.reverse
     [], _ -> acc |> list.reverse
     [ast.PlainText(x), ..xs], [ast.PlainText(y), ..ys] ->
-      finalise_plain_text(xs, [ast.PlainText(y <> x), ..ys])
+      do_finalise_plain_text(xs, [ast.PlainText(y <> x), ..ys])
     [ast.PlainText(x), ..xs], []
     | [ast.PlainText(x), ..xs], [ast.HardLineBreak, ..]
     | [ast.PlainText(x), ..xs], [ast.SoftLineBreak, ..]
-    -> finalise_plain_text(xs, [ast.PlainText(trim_left(x)), ..acc])
+    -> do_finalise_plain_text(xs, [ast.PlainText(trim_left(x)), ..acc])
     [ast.HardLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
     | [ast.SoftLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
-    -> finalise_plain_text(xs, [x, ast.PlainText(trim_right(y)), ..ys])
-    [x, ..xs], _ -> finalise_plain_text(xs, [x, ..acc])
+    -> do_finalise_plain_text(xs, [x, ast.PlainText(trim_right(y)), ..ys])
+    [x, ..xs], _ -> do_finalise_plain_text(xs, [x, ..acc])
   }
 }
 
 pub fn parse_text(text: String) -> List(ast.InlineNode) {
   text
   |> string.to_graphemes
-  |> lex_inline_text([], [])
-  |> parse_inline_wrappers([])
-  |> parse_inline_ast([])
-  |> finalise_plain_text([])
+  |> do_lex_inline_text([], [])
+  |> do_parse_inline_wrappers([])
+  |> do_parse_inline_ast([])
+  |> do_finalise_plain_text([])
 }

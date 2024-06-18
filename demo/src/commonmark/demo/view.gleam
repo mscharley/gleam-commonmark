@@ -1,5 +1,4 @@
-import commonmark/demo/message.{type Msg}
-import commonmark/demo/model.{type Model, Model}
+import commonmark/demo/model.{type Model, type Msg, Model}
 import gleam/dynamic
 import gleam/result
 import lustre/attribute
@@ -14,7 +13,7 @@ import pprint
 fn on_input(event: dynamic.Dynamic) -> Result(Msg, dynamic.DecodeErrors) {
   use target <- result.try(dynamic.field("target", dynamic.dynamic)(event))
   use value <- result.try(dynamic.field("value", dynamic.string)(target))
-  Ok(message.UpdateInput(value))
+  Ok(model.UpdateInput(value))
 }
 
 fn tab_button(
@@ -24,7 +23,7 @@ fn tab_button(
 ) -> element.Element(Msg) {
   ui.button(
     [
-      event.on_click(message.SetTab(tab)),
+      event.on_click(model.SetTab(tab)),
       attribute.style([#("margin-right", "1em")]),
       case model.tab == tab {
         True -> button.primary()

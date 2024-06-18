@@ -1,11 +1,6 @@
 import commonmark
-import commonmark/demo/model.{type Model, Model}
+import commonmark/demo/model.{type Model, type Msg, Model, SetTab, UpdateInput}
 import lustre/effect
-
-pub type Msg {
-  SetTab(model.Tab)
-  UpdateInput(String)
-}
 
 pub fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {

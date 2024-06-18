@@ -1,5 +1,5 @@
-import commonmark
 import commonmark/ast.{type Document, Document}
+import gleam/dict
 import lustre/effect
 
 const initial_document = "Hello, Gleam! 🩷
@@ -40,11 +40,11 @@ fn main () {
 Math is fake: [1, 2, 3] &Element; &Zopf;
 "
 
-pub fn init(_flags) -> #(Model, effect.Effect(a)) {
-  let document = commonmark.parse(initial_document)
-  let html = commonmark.to_html(document)
-
-  #(Model(Preview, initial_document, document, html), effect.none())
+pub fn init(_flags) -> #(Model, effect.Effect(Msg)) {
+  #(
+    Model(Preview, "", ast.Document([], dict.from_list([])), ""),
+    effect.from(fn(dispatch) { dispatch(UpdateInput(initial_document)) }),
+  )
 }
 
 pub type Tab {
@@ -54,4 +54,9 @@ pub type Tab {
 
 pub type Model {
   Model(tab: Tab, input: String, document: Document, html: String)
+}
+
+pub type Msg {
+  SetTab(Tab)
+  UpdateInput(String)
 }
