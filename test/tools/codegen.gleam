@@ -1,14 +1,32 @@
+@target(erlang)
 import gleam/dict
+@target(erlang)
 import gleam/dynamic
+@target(erlang)
 import gleam/http/request
+@target(erlang)
 import gleam/http/response
+@target(erlang)
 import gleam/httpc
+@target(erlang)
 import gleam/int
+@target(erlang)
+import gleam/io
+@target(erlang)
 import gleam/json
+@target(erlang)
 import gleam/list
+@target(erlang)
+import gleam/order
+@target(erlang)
+import gleam/pair
+@target(erlang)
 import gleam/result
+@target(erlang)
 import gleam/string
+@target(erlang)
 import gleam/uri
+@target(erlang)
 import simplifile
 
 @target(erlang)
@@ -26,8 +44,12 @@ const entities_header = "////
 //// Data sourced from https://html.spec.whatwg.org/entities.json
 ////
 
+import gleam/bit_array
+import gleam/list
+import gleam/string
+
 pub fn match_html_entity(input: List(String)) {
-  case input {
+  case input |> list.take(40) |> string.join(\"\") {
 "
 
 @target(erlang)
@@ -43,7 +65,7 @@ type EntityEntry {
 }
 
 @target(erlang)
-fn fetch_entities() {
+fn fetch_entities() -> List(#(String, List(Int))) {
   let assert Ok(response.Response(_, _, body)) =
     entities_list_url
     |> uri.parse
@@ -66,7 +88,6 @@ fn fetch_entities() {
   results
   |> dict.map_values(fn(_, x) { x.codepoints })
   |> dict.to_list
-  |> list.take(1500)
 }
 
 @target(erlang)
@@ -81,11 +102,11 @@ fn is_relevant(entity: #(String, List(Int))) -> List(#(List(String), List(Int)))
 fn format_lines(line) {
   case line {
     #(graphemes, mapping) ->
-      "    ["
-      <> {
-        graphemes |> list.map(fn(g) { "\"" <> g <> "\"" }) |> string.join(", ")
-      }
-      <> ", ..rest] -> Ok(#(rest, \""
+      "    \""
+      <> string.join(graphemes, "")
+      <> "\" <> _ -> Ok(#(list.drop(input, "
+      <> { list.length(graphemes) |> int.to_string }
+      <> "), \""
       <> {
         mapping
         |> list.map(fn(cp) { "\\u{" <> int.to_base16(cp) <> "}" })
@@ -97,11 +118,15 @@ fn format_lines(line) {
 
 @target(erlang)
 pub fn main() {
-  let case_statement =
-    fetch_entities()
-    |> list.flat_map(is_relevant)
-    |> list.map(format_lines)
-    |> string.join("\n")
+  let entities = fetch_entities() |> list.flat_map(is_relevant)
+  let assert Ok(max_length) =
+    entities
+    |> list.map(pair.first)
+    |> list.map(list.length)
+    |> list.sort(order.reverse(int.compare))
+    |> list.first
+  let case_statement = entities |> list.map(format_lines) |> string.join("\n")
+  io.debug(max_length)
 
   let assert Ok(_) =
     simplifile.write(

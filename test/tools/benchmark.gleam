@@ -1,6 +1,10 @@
+@target(erlang)
 import commonmark
+@target(erlang)
 import glychee/benchmark
+@target(erlang)
 import glychee/configuration
+@target(erlang)
 import simplifile
 
 @target(erlang)
