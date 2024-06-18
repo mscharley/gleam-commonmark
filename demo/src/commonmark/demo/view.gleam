@@ -92,6 +92,17 @@ pub fn view(model: Model) -> element.Element(Msg) {
               [
                 tab_button(model, model.Preview, "Preview"),
                 tab_button(model, model.AST, "AST"),
+                ui.button(
+                  [
+                    event.on_click(model.UpdateInput(model.test_document)),
+                    attribute.style([
+                      #("margin-left", "1em"),
+                      #("float", "right"),
+                    ]),
+                    button.outline(),
+                  ],
+                  [element.text("Load test document")],
+                ),
               ],
             ),
             html.div([attribute.style([#("padding", "1em")])], [

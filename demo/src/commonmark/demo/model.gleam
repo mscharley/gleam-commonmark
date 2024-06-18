@@ -2,7 +2,7 @@ import commonmark/ast.{type Document, Document}
 import gleam/dict
 import lustre/effect
 
-const initial_document = "Hello, Gleam! 🩷
+pub const test_document = "Hello, Gleam! 🩷
 ================
 
 This is a handy little testing app for experimenting with CommonMark.
@@ -38,6 +38,12 @@ fn main () {
 > Something someone once said
 
 Math is fake: [1, 2, 3] &Element; &Zopf;
+"
+
+pub const initial_document = "Hello, Gleam! 🩷
+================
+
+Due to limitations in some browsers, the starting document is short. This is a test document you can load on the right.
 "
 
 pub fn init(_flags) -> #(Model, effect.Effect(Msg)) {
