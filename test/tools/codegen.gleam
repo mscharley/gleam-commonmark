@@ -66,7 +66,7 @@ fn fetch_entities() {
   results
   |> dict.map_values(fn(_, x) { x.codepoints })
   |> dict.to_list
-  |> list.take(500)
+  |> list.take(1000)
 }
 
 @target(erlang)
