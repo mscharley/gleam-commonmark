@@ -106,7 +106,7 @@ pub fn view(model: Model) -> element.Element(Msg) {
                   ],
                   [
                     html.img([
-                      attribute.src("/priv/github-mark.png"),
+                      attribute.src("./priv/github-mark.png"),
                       attribute.style([#("width", "auto"), #("height", "1.5em")]),
                     ]),
                   ],
