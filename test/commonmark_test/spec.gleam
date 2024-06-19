@@ -23,7 +23,7 @@ const html_tests = [
   613, 614, 615, 616, 617, 618, 619, 620, 621, 622, 623, 624, 625, 626, 627, 628,
   629, 630, 631, 632,
   // Other tests that rely on inline HTML
-  31, 344,
+  31, 344, 475, 476, 477,
 ]
 
 /// This is a list of expected failures

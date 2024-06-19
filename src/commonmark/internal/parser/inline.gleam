@@ -27,6 +27,12 @@ type InlineWrapper {
   UriAutolink(List(InlineWrapper))
   BacktickString(Int)
   TildeString(Int)
+  SingleAsterisk
+  DoubleAsterisk
+  TripleAsterisk
+  SingleUnderscore
+  DoubleUnderscore
+  TripleUnderscore
   CodeSpan(Int, List(InlineWrapper))
   Strikethrough(Int, List(InlineWrapper))
 }
@@ -48,6 +54,7 @@ fn replace_null_byte(n: Int) {
   }
 }
 
+/// "Unlex" an element back to it's raw form
 fn to_string(el: InlineWrapper) {
   case el {
     LexedElement(HardLineBreak(s)) | LexedElement(Text(s)) -> s
@@ -60,6 +67,12 @@ fn to_string(el: InlineWrapper) {
     LexedElement(Underscore) -> "_"
     LexedElement(SoftLineBreak) -> "\n"
     LexedElement(Entity(name: e, ..)) -> "&" <> e
+    SingleAsterisk -> "*"
+    DoubleAsterisk -> "**"
+    TripleAsterisk -> "***"
+    SingleUnderscore -> "_"
+    DoubleUnderscore -> "__"
+    TripleUnderscore -> "___"
     BacktickString(count) -> string.repeat("`", count)
     CodeSpan(count, content) ->
       string.repeat("`", count)
@@ -254,8 +267,7 @@ fn do_parse_inline_wrappers(
   acc: List(InlineWrapper),
 ) -> List(InlineWrapper) {
   case lexed {
-    // Intentionally not reversed, we will reverse it in the parse_inline_ast phase which is order independent
-    [] -> acc
+    [] -> acc |> list.reverse
     [GreaterThan, ..ls] ->
       case list.split_while(acc, is_not_less_than) {
         #(_, []) ->
@@ -286,6 +298,17 @@ fn do_parse_inline_wrappers(
 
       do_parse_inline_wrappers(ls, acc)
     }
+    [Asterisk, Asterisk, Asterisk, ..ls] ->
+      do_parse_inline_wrappers(ls, [TripleAsterisk, ..acc])
+    [Asterisk, Asterisk, ..ls] ->
+      do_parse_inline_wrappers(ls, [DoubleAsterisk, ..acc])
+    [Asterisk, ..ls] -> do_parse_inline_wrappers(ls, [SingleAsterisk, ..acc])
+    [Underscore, Underscore, Underscore, ..ls] ->
+      do_parse_inline_wrappers(ls, [TripleUnderscore, ..acc])
+    [Underscore, Underscore, ..ls] ->
+      do_parse_inline_wrappers(ls, [DoubleUnderscore, ..acc])
+    [Underscore, ..ls] ->
+      do_parse_inline_wrappers(ls, [SingleUnderscore, ..acc])
     [Tilde, Tilde, ..ls] ->
       case list.first(acc) {
         Ok(TildeString(count)) ->
@@ -307,8 +330,6 @@ fn do_parse_inline_wrappers(
       }
     }
     [Entity(_, _) as v, ..ls]
-    | [Asterisk as v, ..ls]
-    | [Underscore as v, ..ls]
     | [Escaped(_) as v, ..ls]
     | [LessThan as v, ..ls]
     | [HardLineBreak(_) as v, ..ls]
@@ -318,13 +339,19 @@ fn do_parse_inline_wrappers(
   }
 }
 
+fn do_parse_emphasis(wrapped: List(InlineWrapper), acc: List(InlineWrapper)) {
+  case wrapped {
+    [] -> acc |> list.reverse
+    [x, ..xs] -> do_parse_emphasis(xs, [x, ..acc])
+  }
+}
+
 fn do_parse_inline_ast(
   wrapped: List(InlineWrapper),
   acc: List(ast.InlineNode),
 ) -> List(ast.InlineNode) {
   case wrapped {
-    // Intentionally not reversed as our input is reversed coming from the parse_inline_wrappers step
-    [] -> acc
+    [] -> acc |> list.reverse
     [EmailAutolink(l), ..ws] ->
       do_parse_inline_ast(ws, [ast.EmailAutolink(list_to_string(l)), ..acc])
     [UriAutolink(l), ..ws] ->
@@ -348,6 +375,18 @@ fn do_parse_inline_ast(
         ast.StrikeThrough(do_parse_inline_ast(contents, [])),
         ..acc
       ])
+    [SingleAsterisk, ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText("*"), ..acc])
+    [DoubleAsterisk, ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText("**"), ..acc])
+    [TripleAsterisk, ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText("***"), ..acc])
+    [SingleUnderscore, ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText("_"), ..acc])
+    [DoubleUnderscore, ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText("__"), ..acc])
+    [TripleUnderscore, ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText("___"), ..acc])
     [LexedElement(Escaped(s)), ..ws] ->
       do_parse_inline_ast(ws, [ast.PlainText(s), ..acc])
     [LexedElement(Entity(replacement: r, ..)), ..ws] ->
@@ -408,6 +447,7 @@ pub fn parse_text(text: String) -> List(ast.InlineNode) {
   |> string.to_graphemes
   |> do_lex_inline_text([], [])
   |> do_parse_inline_wrappers([])
+  |> do_parse_emphasis([])
   |> do_parse_inline_ast([])
   |> do_finalise_plain_text([])
 }
