@@ -1,6 +1,6 @@
 *.beam
 *.ez
 /build
-/priv
+/priv/static/commonmark_demo.mjs
 erl_crash.dump
 /out

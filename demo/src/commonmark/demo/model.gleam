@@ -40,16 +40,10 @@ fn main () {
 Math is fake: [1, 2, 3] &Element; &Zopf;
 "
 
-pub const initial_document = "Hello, Gleam! 🩷
-================
-
-Due to limitations in some browsers, the starting document is short. This is a test document you can load on the right.
-"
-
 pub fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(Preview, "", ast.Document([], dict.from_list([])), ""),
-    effect.from(fn(dispatch) { dispatch(UpdateInput(initial_document)) }),
+    effect.from(fn(dispatch) { dispatch(UpdateInput(test_document)) }),
   )
 }
 

@@ -92,6 +92,25 @@ pub fn view(model: Model) -> element.Element(Msg) {
               [
                 tab_button(model, model.Preview, "Preview"),
                 tab_button(model, model.AST, "AST"),
+                button.of(
+                  html.a,
+                  [
+                    attribute.href(
+                      "https://github.com/mscharley/gleam-commonmark",
+                    ),
+                    attribute.style([
+                      #("margin-left", "1em"),
+                      #("float", "right"),
+                    ]),
+                    button.outline(),
+                  ],
+                  [
+                    html.img([
+                      attribute.src("/priv/github-mark.png"),
+                      attribute.style([#("width", "auto"), #("height", "1.5em")]),
+                    ]),
+                  ],
+                ),
                 ui.button(
                   [
                     event.on_click(model.UpdateInput(model.test_document)),
@@ -101,7 +120,7 @@ pub fn view(model: Model) -> element.Element(Msg) {
                     ]),
                     button.outline(),
                   ],
-                  [element.text("Load test document")],
+                  [element.text("Reload test document")],
                 ),
               ],
             ),
