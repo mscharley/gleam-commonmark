@@ -11,13 +11,9 @@ import gleam/httpc
 @target(erlang)
 import gleam/int
 @target(erlang)
-import gleam/io
-@target(erlang)
 import gleam/json
 @target(erlang)
 import gleam/list
-@target(erlang)
-import gleam/order
 @target(erlang)
 import gleam/pair
 @target(erlang)
@@ -44,20 +40,12 @@ const entities_header = "////
 //// Data sourced from https://html.spec.whatwg.org/entities.json
 ////
 
-import gleam/bit_array
 import gleam/list
 import gleam/string
-
-pub fn match_html_entity(input: List(String)) {
-  case input |> list.take(40) |> string.join(\"\") {
 "
 
 @target(erlang)
-const entities_footer = "
-    _ -> Error(Nil)
-  }
-}
-"
+const entities_footer = ""
 
 @target(erlang)
 type EntityEntry {
@@ -91,9 +79,9 @@ fn fetch_entities() -> List(#(String, List(Int))) {
 }
 
 @target(erlang)
-fn is_relevant(entity: #(String, List(Int))) -> List(#(List(String), List(Int))) {
+fn is_relevant(entity: #(String, List(Int))) -> List(#(String, List(Int))) {
   case string.ends_with(entity.0, ";"), entity {
-    True, #("&" <> rest, mapping) -> [#(string.to_graphemes(rest), mapping)]
+    True, #("&" <> rest, mapping) -> [#(rest, mapping)]
     _, _ -> []
   }
 }
@@ -103,9 +91,9 @@ fn format_lines(line) {
   case line {
     #(graphemes, mapping) ->
       "    \""
-      <> string.join(graphemes, "")
+      <> graphemes
       <> "\" <> _ -> Ok(#(list.drop(input, "
-      <> { list.length(graphemes) |> int.to_string }
+      <> { string.length(graphemes) |> int.to_string }
       <> "), \""
       <> {
         mapping
@@ -117,22 +105,69 @@ fn format_lines(line) {
 }
 
 @target(erlang)
-pub fn main() {
-  let entities = fetch_entities() |> list.flat_map(is_relevant)
-  let assert Ok(max_length) =
-    entities
-    |> list.map(pair.first)
-    |> list.map(list.length)
-    |> list.sort(order.reverse(int.compare))
-    |> list.first
-  let case_statement = entities |> list.map(format_lines) |> string.join("\n")
-  io.debug(max_length)
+pub fn safe_prefix(prefix: String) {
+  let lcase = string.lowercase(prefix)
+  case prefix == lcase {
+    True -> prefix
+    False -> "upper_" <> lcase
+  }
+}
 
-  let assert Ok(_) =
-    simplifile.write(
-      to: output_file,
-      contents: entities_header <> case_statement <> entities_footer,
-    )
+@target(erlang)
+pub fn main() {
+  let entities =
+    fetch_entities()
+    |> list.flat_map(is_relevant)
+    |> list.group(fn(x) {
+      let assert Ok(c) = string.first(x.0)
+      c
+    })
+    |> dict.to_list
+  let functions =
+    entities
+    |> list.sort(fn(l, r) { string.compare(l.0, r.0) })
+    |> list.map(fn(pair) {
+      let #(prefix, es) = pair
+      let case_statements =
+        es
+        |> list.sort(fn(l, r) { string.compare(l.0, r.0) })
+        |> list.map(format_lines)
+        |> string.join("\n")
+
+      #(
+        prefix,
+        "\nfn match_"
+          <> safe_prefix(prefix)
+          <> "(entity: String, input: List(String)) {\n  case entity {\n"
+          <> case_statements
+          <> "\n    _ -> Error(Nil)\n  }\n}\n",
+      )
+    })
+
+  let entry = "
+pub fn match_html_entity(input: List(String)) -> Result(#(List(String), String), Nil) {
+  let entity = input |> list.take(40) |> string.join(\"\")
+  case list.first(input) {
+" <> {
+      functions
+      |> list.map(pair.first)
+      |> list.map(fn(s) {
+        "    Ok(\"" <> s <> "\") -> match_" <> safe_prefix(s)
+      })
+      |> string.join("\n")
+    } <> "
+    _ -> fn(_, _) { Error(Nil) }
+  }(entity, input)
+}
+"
+
+  let contents =
+    entities_header
+    <> entry
+    <> { functions |> list.map(pair.second) |> string.join("") }
+    <> entities_footer
+
+  let assert Ok(_) = simplifile.write(to: output_file, contents: contents)
 
   Nil
 }
