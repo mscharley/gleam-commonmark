@@ -95,6 +95,8 @@ fn format_lines(line) {
       <> "\" <> _ -> Ok(#(list.drop(input, "
       <> { string.length(graphemes) |> int.to_string }
       <> "), \""
+      <> graphemes
+      <> "\", \""
       <> {
         mapping
         |> list.map(fn(cp) { "\\u{" <> int.to_base16(cp) <> "}" })
@@ -145,7 +147,7 @@ pub fn main() {
     })
 
   let entry = "
-pub fn match_html_entity(input: List(String)) -> Result(#(List(String), String), Nil) {
+pub fn match_html_entity(input: List(String)) -> Result(#(List(String), String, String), Nil) {
   let entity = input |> list.take(40) |> string.join(\"\")
   case list.first(input) {
 " <> {

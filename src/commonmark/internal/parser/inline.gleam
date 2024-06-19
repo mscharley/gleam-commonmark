@@ -8,6 +8,7 @@ import gleam/result
 import gleam/string
 
 type InlineLexer {
+  Entity(name: String, replacement: String)
   Escaped(String)
   Text(String)
   LessThan
@@ -58,6 +59,7 @@ fn to_string(el: InlineWrapper) {
     LexedElement(Asterisk) -> "*"
     LexedElement(Underscore) -> "_"
     LexedElement(SoftLineBreak) -> "\n"
+    LexedElement(Entity(name: e, ..)) -> "&" <> e
     BacktickString(count) -> string.repeat("`", count)
     CodeSpan(count, content) ->
       string.repeat("`", count)
@@ -87,11 +89,13 @@ fn translate_numerical_entity(
   |> result.map(fn(cp) { #(rest, string.from_utf_codepoints([cp])) })
 }
 
-fn match_entity(input: List(String)) -> Result(#(List(String), String), Nil) {
+fn match_entity(
+  input: List(String),
+) -> Result(#(List(String), String, String), Nil) {
   entity.match_html_entity(input)
   |> result.try_recover(fn(_) {
     let assert Ok(dec_entity) = regex.from_string("^#([0-9]{1,7});")
-    let assert Ok(hex_entity) = regex.from_string("^#[xX]([0-9a-fA-F]{1,6});")
+    let assert Ok(hex_entity) = regex.from_string("^#([xX]([0-9a-fA-F]{1,6}));")
     let potential = list.take(input, 9) |> string.join("")
 
     case regex.scan(dec_entity, potential), regex.scan(hex_entity, potential) {
@@ -99,10 +103,12 @@ fn match_entity(input: List(String)) -> Result(#(List(String), String), Nil) {
         n
         |> int.parse
         |> translate_numerical_entity(list.drop(input, string.length(full)))
-      _, [regex.Match(full, [Some(n)])] ->
+        |> result.map(fn(r) { #(r.0, n, r.1) })
+      _, [regex.Match(full, [Some(m), Some(n)])] ->
         n
         |> int.base_parse(16)
         |> translate_numerical_entity(list.drop(input, string.length(full)))
+        |> result.map(fn(r) { #(r.0, m, r.1) })
       _, _ -> Error(Nil)
     }
   })
@@ -214,8 +220,12 @@ fn do_lex_inline_text(
       ])
     ["&", ..xs] ->
       case match_entity(xs) {
-        Ok(#(rest, replacement)) ->
-          do_lex_inline_text(rest, [replacement, ..text], acc)
+        Ok(#(rest, e, replacement)) ->
+          do_lex_inline_text(rest, [], [
+            Entity(e, replacement),
+            Text(text |> list.reverse |> string.join("")),
+            ..acc
+          ])
         Error(_) -> do_lex_inline_text(xs, ["&", ..text], acc)
       }
     ["\\", g, ..xs] ->
@@ -296,7 +306,8 @@ fn do_parse_inline_wrappers(
         False -> do_parse_inline_wrappers(ls, [TildeString(count), ..acc])
       }
     }
-    [Asterisk as v, ..ls]
+    [Entity(_, _) as v, ..ls]
+    | [Asterisk as v, ..ls]
     | [Underscore as v, ..ls]
     | [Escaped(_) as v, ..ls]
     | [LessThan as v, ..ls]
@@ -339,6 +350,8 @@ fn do_parse_inline_ast(
       ])
     [LexedElement(Escaped(s)), ..ws] ->
       do_parse_inline_ast(ws, [ast.PlainText(s), ..acc])
+    [LexedElement(Entity(replacement: r, ..)), ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText(r), ..acc])
     [LexedElement(SoftLineBreak), ..ws] ->
       do_parse_inline_ast(ws, [ast.SoftLineBreak, ..acc])
     [LexedElement(HardLineBreak(_)), ..ws] ->
