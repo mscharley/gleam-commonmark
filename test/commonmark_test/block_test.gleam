@@ -2,6 +2,7 @@ import commonmark
 import commonmark/ast
 import commonmark/internal/parser/helpers
 import gleam/dict
+import startest.{describe, it}
 import startest/expect
 
 pub fn null_byte_test() {
@@ -47,30 +48,28 @@ pub fn windows_test() {
   ))
 }
 
-pub fn trim_indent_short_test() {
-  "foo" |> helpers.trim_indent(4) |> expect.to_equal("foo")
-}
-
-pub fn trim_indent_long_test() {
-  "      foo" |> helpers.trim_indent(4) |> expect.to_equal("  foo")
-}
-
-pub fn trim_indent_tab1_test() {
-  "   \t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
-}
-
-pub fn trim_indent_tab2_test() {
-  "  \t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
-}
-
-pub fn trim_indent_tab3_test() {
-  " \t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
-}
-
-pub fn trim_indent_tab4_test() {
-  "\t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
-}
-
-pub fn trim_indent_midtab_test() {
-  "\t\t\tfoo" |> helpers.trim_indent(6) |> expect.to_equal("  \tfoo")
+pub fn trim_indent_tests() {
+  describe("trim_indent", [
+    it("overtrims", fn() {
+      "foo" |> helpers.trim_indent(4) |> expect.to_equal("foo")
+    }),
+    it("undertrims", fn() {
+      "      foo" |> helpers.trim_indent(4) |> expect.to_equal("  foo")
+    }),
+    it("tabstop 1", fn() {
+      "   \t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
+    }),
+    it("tabstop 2", fn() {
+      "  \t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
+    }),
+    it("tabstop 3", fn() {
+      " \t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
+    }),
+    it("tabstop 4", fn() {
+      "\t foo" |> helpers.trim_indent(4) |> expect.to_equal(" foo")
+    }),
+    it("trims partial tabs", fn() {
+      "\t\t\tfoo" |> helpers.trim_indent(6) |> expect.to_equal("  \tfoo")
+    }),
+  ])
 }

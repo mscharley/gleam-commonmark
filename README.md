@@ -52,7 +52,7 @@ The current version of CommonMark targetted is [0.31.2][commonmark].
 * 🚧 Ordered lists
 * 🚧 Unordered lists
 * ✅ Code spans
-* ❌ Emphasis and strong emphasis
+* 🚧 Emphasis and strong emphasis
 * ❌ Links
 * ❌ Images
 * ✅ Autolinks

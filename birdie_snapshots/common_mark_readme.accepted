@@ -53,7 +53,12 @@ This is a test."
       PlainText("There is also an [interactive demo][demo] which you can use to test how this library interacts with your documents."),
     ]),
     Paragraph([
-      PlainText("[readme-ast]: https://github.com/mscharley/gleam-commonmark/tree/main/birdie_snapshots/common_mark_readme.accepted"),
+      PlainText("[readme-ast]: https://github.com/mscharley/gleam-commonmark/tree/main/birdie"),
+      Emphasis(
+        [PlainText("snapshots/common")],
+        UnderscoreEmphasisMarker,
+      ),
+      PlainText("mark_readme.accepted"),
       SoftLineBreak,
       PlainText("[demo]: https://mscharley.github.io/gleam-commonmark/"),
     ]),
@@ -133,7 +138,7 @@ This is a test."
         ]),
         TightListItem([
           Paragraph([
-            PlainText("❌ Emphasis and strong emphasis"),
+            PlainText("🚧 Emphasis and strong emphasis"),
           ]),
         ]),
         TightListItem([

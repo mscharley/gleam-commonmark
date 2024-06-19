@@ -33,6 +33,8 @@ type InlineWrapper {
   SingleUnderscore
   DoubleUnderscore
   TripleUnderscore
+  Emphasis(List(InlineWrapper), ast.EmphasisMarker)
+  StrongEmphasis(List(InlineWrapper), ast.EmphasisMarker)
   CodeSpan(Int, List(InlineWrapper))
   Strikethrough(Int, List(InlineWrapper))
 }
@@ -73,6 +75,16 @@ fn to_string(el: InlineWrapper) {
     SingleUnderscore -> "_"
     DoubleUnderscore -> "__"
     TripleUnderscore -> "___"
+    Emphasis(contents, marker) ->
+      case marker {
+        ast.AsteriskEmphasisMarker -> "*" <> list_to_string(contents) <> "*"
+        ast.UnderscoreEmphasisMarker -> "_" <> list_to_string(contents) <> "_"
+      }
+    StrongEmphasis(contents, marker) ->
+      case marker {
+        ast.AsteriskEmphasisMarker -> "**" <> list_to_string(contents) <> "**"
+        ast.UnderscoreEmphasisMarker -> "__" <> list_to_string(contents) <> "__"
+      }
     BacktickString(count) -> string.repeat("`", count)
     CodeSpan(count, content) ->
       string.repeat("`", count)
@@ -125,46 +137,6 @@ fn match_entity(
       _, _ -> Error(Nil)
     }
   })
-}
-
-fn parse_autolink(href: List(InlineWrapper)) -> Result(InlineWrapper, Nil) {
-  // Borrowed direct from the spec
-  let assert Ok(email_regex) =
-    regex.from_string(
-      "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
-    )
-  let assert Ok(uri_regex) =
-    regex.from_string("^[a-zA-Z][-a-zA-Z+.]{1,31}:[^ \t]+$")
-  let href_str = list_to_string(href)
-
-  case regex.check(email_regex, href_str), regex.check(uri_regex, href_str) {
-    True, _ -> Ok(EmailAutolink(href))
-    _, True -> Ok(UriAutolink(href))
-    False, False -> Error(Nil)
-  }
-}
-
-fn parse_code_span(
-  size: Int,
-  previous: List(InlineWrapper),
-) -> List(InlineWrapper) {
-  case list.split_while(previous, fn(n) { n != BacktickString(size) }) {
-    #(_, []) -> [BacktickString(size), ..previous]
-    #(wrapped, [_, ..rest]) -> [CodeSpan(size, list.reverse(wrapped)), ..rest]
-  }
-}
-
-fn parse_strikethrough(
-  size: Int,
-  previous: List(InlineWrapper),
-) -> List(InlineWrapper) {
-  case list.split_while(previous, fn(n) { n != TildeString(size) }) {
-    #(_, []) -> [TildeString(size), ..previous]
-    #(wrapped, [_, ..rest]) -> [
-      Strikethrough(size, list.reverse(wrapped)),
-      ..rest
-    ]
-  }
 }
 
 fn do_lex_inline_text(
@@ -255,6 +227,33 @@ fn do_lex_inline_text(
   }
 }
 
+fn parse_code_span(
+  size: Int,
+  previous: List(InlineWrapper),
+) -> List(InlineWrapper) {
+  case list.split_while(previous, fn(n) { n != BacktickString(size) }) {
+    #(_, []) -> [BacktickString(size), ..previous]
+    #(wrapped, [_, ..rest]) -> [CodeSpan(size, list.reverse(wrapped)), ..rest]
+  }
+}
+
+fn parse_autolink(href: List(InlineWrapper)) -> Result(InlineWrapper, Nil) {
+  // Borrowed direct from the spec
+  let assert Ok(email_regex) =
+    regex.from_string(
+      "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+    )
+  let assert Ok(uri_regex) =
+    regex.from_string("^[a-zA-Z][-a-zA-Z+.]{1,31}:[^ \t]+$")
+  let href_str = list_to_string(href)
+
+  case regex.check(email_regex, href_str), regex.check(uri_regex, href_str) {
+    True, _ -> Ok(EmailAutolink(href))
+    _, True -> Ok(UriAutolink(href))
+    False, False -> Error(Nil)
+  }
+}
+
 fn is_not_less_than(v: InlineWrapper) -> Bool {
   case v {
     LexedElement(LessThan) -> False
@@ -336,6 +335,61 @@ fn do_parse_inline_wrappers(
   }
 }
 
+fn parse_strikethrough(
+  size: Int,
+  previous: List(InlineWrapper),
+) -> List(InlineWrapper) {
+  case list.split_while(previous, fn(n) { n != TildeString(size) }) {
+    #(_, []) -> [TildeString(size), ..previous]
+    #(wrapped, [_, ..rest]) -> [
+      Strikethrough(size, list.reverse(wrapped)),
+      ..rest
+    ]
+  }
+}
+
+fn parse_triple_emphasis(
+  delimiter: InlineWrapper,
+  marker: ast.EmphasisMarker,
+  previous: List(InlineWrapper),
+) {
+  case list.split_while(previous, fn(n) { n != delimiter }) {
+    #(_, []) -> [delimiter, ..previous]
+    #(wrapped, [_, ..rest]) -> [
+      Emphasis([StrongEmphasis(list.reverse(wrapped), marker)], marker),
+      ..rest
+    ]
+  }
+}
+
+fn parse_double_emphasis(
+  delimiter: InlineWrapper,
+  marker: ast.EmphasisMarker,
+  previous: List(InlineWrapper),
+) {
+  case list.split_while(previous, fn(n) { n != delimiter }) {
+    #(_, []) -> [delimiter, ..previous]
+    #(wrapped, [_, ..rest]) -> [
+      StrongEmphasis(list.reverse(wrapped), marker),
+      ..rest
+    ]
+  }
+}
+
+import gleam/io
+
+fn parse_single_emphasis(
+  delimiter: InlineWrapper,
+  marker: ast.EmphasisMarker,
+  previous: List(InlineWrapper),
+) {
+  case io.debug(list.split_while(previous, fn(n) { n != delimiter })) {
+    #(_, []) -> [delimiter, ..previous]
+    #(wrapped, [_, ..rest]) ->
+      io.debug([Emphasis(list.reverse(wrapped), marker), ..rest])
+  }
+}
+
 fn do_parse_emphasis(wrapped: List(InlineWrapper), acc: List(InlineWrapper)) {
   case wrapped {
     [] -> acc |> list.reverse
@@ -345,6 +399,48 @@ fn do_parse_emphasis(wrapped: List(InlineWrapper), acc: List(InlineWrapper)) {
         False -> do_parse_emphasis(xs, [TildeString(count), ..acc])
       }
     }
+    [TripleAsterisk, ..xs] ->
+      do_parse_emphasis(
+        xs,
+        parse_triple_emphasis(TripleAsterisk, ast.AsteriskEmphasisMarker, acc),
+      )
+    [DoubleAsterisk, ..xs] ->
+      do_parse_emphasis(
+        xs,
+        parse_double_emphasis(DoubleAsterisk, ast.AsteriskEmphasisMarker, acc),
+      )
+    [SingleAsterisk, ..xs] ->
+      do_parse_emphasis(
+        xs,
+        parse_single_emphasis(SingleAsterisk, ast.AsteriskEmphasisMarker, acc),
+      )
+    [TripleUnderscore, ..xs] ->
+      do_parse_emphasis(
+        xs,
+        parse_triple_emphasis(
+          TripleUnderscore,
+          ast.UnderscoreEmphasisMarker,
+          acc,
+        ),
+      )
+    [DoubleUnderscore, ..xs] ->
+      do_parse_emphasis(
+        xs,
+        parse_double_emphasis(
+          DoubleUnderscore,
+          ast.UnderscoreEmphasisMarker,
+          acc,
+        ),
+      )
+    [SingleUnderscore, ..xs] ->
+      do_parse_emphasis(
+        xs,
+        parse_single_emphasis(
+          SingleUnderscore,
+          ast.UnderscoreEmphasisMarker,
+          acc,
+        ),
+      )
     [x, ..xs] -> do_parse_emphasis(xs, [x, ..acc])
   }
 }
@@ -376,6 +472,16 @@ fn do_parse_inline_ast(
     [Strikethrough(_, contents), ..ws] ->
       do_parse_inline_ast(ws, [
         ast.StrikeThrough(do_parse_inline_ast(contents, [])),
+        ..acc
+      ])
+    [Emphasis(contents, marker), ..ws] ->
+      do_parse_inline_ast(ws, [
+        ast.Emphasis(do_parse_inline_ast(contents, []), marker),
+        ..acc
+      ])
+    [StrongEmphasis(contents, marker), ..ws] ->
+      do_parse_inline_ast(ws, [
+        ast.StrongEmphasis(do_parse_inline_ast(contents, []), marker),
         ..acc
       ])
     [SingleAsterisk, ..ws] ->
