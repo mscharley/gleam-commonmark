@@ -324,10 +324,7 @@ fn do_parse_inline_wrappers(
         _ -> #(1, acc)
       }
 
-      case count <= 2 {
-        True -> do_parse_inline_wrappers(ls, parse_strikethrough(count, acc))
-        False -> do_parse_inline_wrappers(ls, [TildeString(count), ..acc])
-      }
+      do_parse_inline_wrappers(ls, [TildeString(count), ..acc])
     }
     [Entity(_, _) as v, ..ls]
     | [Escaped(_) as v, ..ls]
@@ -342,6 +339,12 @@ fn do_parse_inline_wrappers(
 fn do_parse_emphasis(wrapped: List(InlineWrapper), acc: List(InlineWrapper)) {
   case wrapped {
     [] -> acc |> list.reverse
+    [TildeString(count), ..xs] -> {
+      case count <= 2 {
+        True -> do_parse_emphasis(xs, parse_strikethrough(count, acc))
+        False -> do_parse_emphasis(xs, [TildeString(count), ..acc])
+      }
+    }
     [x, ..xs] -> do_parse_emphasis(xs, [x, ..acc])
   }
 }
