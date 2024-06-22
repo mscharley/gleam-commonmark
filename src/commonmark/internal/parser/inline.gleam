@@ -17,6 +17,13 @@ type InlineLexer {
   Tilde
   Asterisk
   Underscore
+  OpenBracket
+  CloseBracket
+  OpenSquareBracket
+  CloseSquareBracket
+  SingleQuote
+  DoubleQuote
+  Exclamation
   SoftLineBreak
   HardLineBreak(String)
 }
@@ -65,6 +72,13 @@ fn to_string(el: InlineWrapper) {
     LexedElement(Underscore) -> "_"
     LexedElement(SoftLineBreak) -> "\n"
     LexedElement(Entity(name: e, ..)) -> "&" <> e
+    LexedElement(OpenBracket) -> "("
+    LexedElement(CloseBracket) -> ")"
+    LexedElement(OpenSquareBracket) -> "["
+    LexedElement(CloseSquareBracket) -> "]"
+    LexedElement(SingleQuote) -> "'"
+    LexedElement(DoubleQuote) -> "\""
+    LexedElement(Exclamation) -> "!"
     Emphasis(contents, marker) ->
       case marker {
         ast.AsteriskEmphasisMarker -> "*" <> list_to_string(contents) <> "*"
@@ -150,6 +164,48 @@ fn do_lex_inline_text(
     [">", ..xs] ->
       do_lex_inline_text(xs, [], [
         GreaterThan,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["[", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        OpenSquareBracket,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["]", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        CloseSquareBracket,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["(", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        OpenBracket,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    [")", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        CloseBracket,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["'", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        SingleQuote,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["\"", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        DoubleQuote,
+        Text(text |> list.reverse |> string.join("")),
+        ..acc
+      ])
+    ["!", ..xs] ->
+      do_lex_inline_text(xs, [], [
+        Exclamation,
         Text(text |> list.reverse |> string.join("")),
         ..acc
       ])
@@ -340,7 +396,14 @@ fn do_parse_inline_wrappers(
 
       do_parse_inline_wrappers(ls, [TildeString(count), ..acc])
     }
-    [Entity(_, _) as v, ..ls]
+    [Exclamation as v, ..ls]
+    | [SingleQuote as v, ..ls]
+    | [DoubleQuote as v, ..ls]
+    | [OpenBracket as v, ..ls]
+    | [CloseBracket as v, ..ls]
+    | [OpenSquareBracket as v, ..ls]
+    | [CloseSquareBracket as v, ..ls]
+    | [Entity(_, _) as v, ..ls]
     | [Escaped(_) as v, ..ls]
     | [LessThan as v, ..ls]
     | [HardLineBreak(_) as v, ..ls]
@@ -486,6 +549,20 @@ fn do_parse_inline_ast(
       do_parse_inline_ast(ws, [ast.SoftLineBreak, ..acc])
     [LexedElement(HardLineBreak(_)), ..ws] ->
       do_parse_inline_ast(ws, [ast.HardLineBreak, ..acc])
+    [LexedElement(OpenBracket), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text("(")), ..ws], acc)
+    [LexedElement(CloseBracket), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text(")")), ..ws], acc)
+    [LexedElement(OpenSquareBracket), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text("[")), ..ws], acc)
+    [LexedElement(CloseSquareBracket), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text("]")), ..ws], acc)
+    [LexedElement(SingleQuote), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text("'")), ..ws], acc)
+    [LexedElement(DoubleQuote), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text("\"")), ..ws], acc)
+    [LexedElement(Exclamation), ..ws] ->
+      do_parse_inline_ast([LexedElement(Text("!")), ..ws], acc)
     [LexedElement(Asterisk), ..ws] ->
       do_parse_inline_ast([LexedElement(Text("*")), ..ws], acc)
     [LexedElement(Underscore), ..ws] ->
