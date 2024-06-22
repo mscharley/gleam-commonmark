@@ -520,6 +520,21 @@ fn do_finalise_plain_text(ast: List(ast.InlineNode), acc: List(ast.InlineNode)) 
     [], [ast.PlainText(y), ..ys] ->
       [ast.PlainText(trim_right(y)), ..ys] |> list.reverse
     [], _ -> acc |> list.reverse
+    [ast.StrongEmphasis(content, marker), ..xs], _ ->
+      do_finalise_plain_text(xs, [
+        ast.StrongEmphasis(do_finalise_plain_text(content, []), marker),
+        ..acc
+      ])
+    [ast.Emphasis(content, marker), ..xs], _ ->
+      do_finalise_plain_text(xs, [
+        ast.Emphasis(do_finalise_plain_text(content, []), marker),
+        ..acc
+      ])
+    [ast.StrikeThrough(content), ..xs], _ ->
+      do_finalise_plain_text(xs, [
+        ast.StrikeThrough(do_finalise_plain_text(content, [])),
+        ..acc
+      ])
     [ast.PlainText(x), ..xs], [ast.PlainText(y), ..ys] ->
       do_finalise_plain_text(xs, [ast.PlainText(y <> x), ..ys])
     [ast.PlainText(x), ..xs], []
