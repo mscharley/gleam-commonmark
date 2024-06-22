@@ -27,12 +27,8 @@ type InlineWrapper {
   UriAutolink(List(InlineWrapper))
   BacktickString(Int)
   TildeString(Int)
-  SingleAsterisk
-  DoubleAsterisk
-  TripleAsterisk
-  SingleUnderscore
-  DoubleUnderscore
-  TripleUnderscore
+  AsteriskString(Int)
+  UnderscoreString(Int)
   Emphasis(List(InlineWrapper), ast.EmphasisMarker)
   StrongEmphasis(List(InlineWrapper), ast.EmphasisMarker)
   CodeSpan(Int, List(InlineWrapper))
@@ -69,12 +65,6 @@ fn to_string(el: InlineWrapper) {
     LexedElement(Underscore) -> "_"
     LexedElement(SoftLineBreak) -> "\n"
     LexedElement(Entity(name: e, ..)) -> "&" <> e
-    SingleAsterisk -> "*"
-    DoubleAsterisk -> "**"
-    TripleAsterisk -> "***"
-    SingleUnderscore -> "_"
-    DoubleUnderscore -> "__"
-    TripleUnderscore -> "___"
     Emphasis(contents, marker) ->
       case marker {
         ast.AsteriskEmphasisMarker -> "*" <> list_to_string(contents) <> "*"
@@ -86,6 +76,8 @@ fn to_string(el: InlineWrapper) {
         ast.UnderscoreEmphasisMarker -> "__" <> list_to_string(contents) <> "__"
       }
     BacktickString(count) -> string.repeat("`", count)
+    AsteriskString(count) -> string.repeat("*", count)
+    UnderscoreString(count) -> string.repeat("_", count)
     CodeSpan(count, content) ->
       string.repeat("`", count)
       <> list_to_string(content)
@@ -279,35 +271,58 @@ fn do_parse_inline_wrappers(
           }
       }
     [Backtick, Backtick, ..ls] ->
-      case list.first(acc) {
-        Ok(BacktickString(count)) ->
+      case acc {
+        [BacktickString(count), ..rest] ->
           do_parse_inline_wrappers([Backtick, ..ls], [
             BacktickString(count + 1),
-            ..list.drop(acc, 1)
+            ..rest
           ])
         _ ->
           do_parse_inline_wrappers([Backtick, ..ls], [BacktickString(1), ..acc])
       }
     [Backtick, ..ls] -> {
-      let acc = case list.first(acc) {
-        Ok(BacktickString(count)) ->
-          parse_code_span(count + 1, list.drop(acc, 1))
+      let acc = case acc {
+        [BacktickString(count), ..rest] -> parse_code_span(count + 1, rest)
         _ -> parse_code_span(1, acc)
       }
 
       do_parse_inline_wrappers(ls, acc)
     }
-    [Asterisk, Asterisk, Asterisk, ..ls] ->
-      do_parse_inline_wrappers(ls, [TripleAsterisk, ..acc])
     [Asterisk, Asterisk, ..ls] ->
-      do_parse_inline_wrappers(ls, [DoubleAsterisk, ..acc])
-    [Asterisk, ..ls] -> do_parse_inline_wrappers(ls, [SingleAsterisk, ..acc])
-    [Underscore, Underscore, Underscore, ..ls] ->
-      do_parse_inline_wrappers(ls, [TripleUnderscore, ..acc])
+      case acc {
+        [AsteriskString(count), ..rest] ->
+          do_parse_inline_wrappers([Asterisk, ..ls], [
+            AsteriskString(count + 1),
+            ..rest
+          ])
+        _ ->
+          do_parse_inline_wrappers([Asterisk, ..ls], [AsteriskString(1), ..acc])
+      }
+    [Asterisk, ..ls] ->
+      case acc {
+        [AsteriskString(count), ..rest] ->
+          do_parse_inline_wrappers(ls, [AsteriskString(count + 1), ..rest])
+        _ -> do_parse_inline_wrappers(ls, [AsteriskString(1), ..acc])
+      }
     [Underscore, Underscore, ..ls] ->
-      do_parse_inline_wrappers(ls, [DoubleUnderscore, ..acc])
+      case acc {
+        [UnderscoreString(count), ..rest] ->
+          do_parse_inline_wrappers([Underscore, ..ls], [
+            UnderscoreString(count + 1),
+            ..rest
+          ])
+        _ ->
+          do_parse_inline_wrappers([Underscore, ..ls], [
+            UnderscoreString(1),
+            ..acc
+          ])
+      }
     [Underscore, ..ls] ->
-      do_parse_inline_wrappers(ls, [SingleUnderscore, ..acc])
+      case acc {
+        [UnderscoreString(count), ..rest] ->
+          do_parse_inline_wrappers(ls, [UnderscoreString(count + 1), ..rest])
+        _ -> do_parse_inline_wrappers(ls, [UnderscoreString(1), ..acc])
+      }
     [Tilde, Tilde, ..ls] ->
       case list.first(acc) {
         Ok(TildeString(count)) ->
@@ -348,45 +363,56 @@ fn parse_strikethrough(
   }
 }
 
-fn parse_triple_emphasis(
-  delimiter: InlineWrapper,
-  marker: ast.EmphasisMarker,
-  previous: List(InlineWrapper),
-) {
-  case list.split_while(previous, fn(n) { n != delimiter }) {
-    #(_, []) -> [delimiter, ..previous]
-    #(wrapped, [_, ..rest]) -> [
-      Emphasis([StrongEmphasis(list.reverse(wrapped), marker)], marker),
-      ..rest
-    ]
-  }
-}
+fn parse_emphasis(final: InlineWrapper, previous: List(InlineWrapper)) {
+  let #(wrapped, rest) =
+    list.split_while(previous, fn(n) {
+      case n, final {
+        AsteriskString(l), AsteriskString(r)
+        | UnderscoreString(l), UnderscoreString(r)
+        ->
+          !{
+            l > 0
+            && r > 0
+            && { { l + r } % 3 != 0 || { l % 3 == 0 && r % 3 == 0 } }
+          }
+        _, _ -> True
+      }
+    })
 
-fn parse_double_emphasis(
-  delimiter: InlineWrapper,
-  marker: ast.EmphasisMarker,
-  previous: List(InlineWrapper),
-) {
-  case list.split_while(previous, fn(n) { n != delimiter }) {
-    #(_, []) -> [delimiter, ..previous]
-    #(wrapped, [_, ..rest]) -> [
-      StrongEmphasis(list.reverse(wrapped), marker),
-      ..rest
-    ]
-  }
-}
-
-import gleam/io
-
-fn parse_single_emphasis(
-  delimiter: InlineWrapper,
-  marker: ast.EmphasisMarker,
-  previous: List(InlineWrapper),
-) {
-  case io.debug(list.split_while(previous, fn(n) { n != delimiter })) {
-    #(_, []) -> [delimiter, ..previous]
-    #(wrapped, [_, ..rest]) ->
-      io.debug([Emphasis(list.reverse(wrapped), marker), ..rest])
+  case final, rest {
+    AsteriskString(r), [AsteriskString(l), ..rest] if l >= 2 && r >= 2 -> #(
+      [AsteriskString(r - 2)],
+      [
+        StrongEmphasis(list.reverse(wrapped), ast.AsteriskEmphasisMarker),
+        AsteriskString(l - 2),
+        ..rest
+      ],
+    )
+    AsteriskString(r), [AsteriskString(l), ..rest] -> #(
+      [AsteriskString(r - 1)],
+      [
+        Emphasis(list.reverse(wrapped), ast.AsteriskEmphasisMarker),
+        AsteriskString(l - 1),
+        ..rest
+      ],
+    )
+    UnderscoreString(r), [UnderscoreString(l), ..rest] if l >= 2 && r >= 2 -> #(
+      [UnderscoreString(r - 2)],
+      [
+        StrongEmphasis(list.reverse(wrapped), ast.UnderscoreEmphasisMarker),
+        UnderscoreString(l - 2),
+        ..rest
+      ],
+    )
+    UnderscoreString(r), [UnderscoreString(l), ..rest] -> #(
+      [UnderscoreString(r - 1)],
+      [
+        Emphasis(list.reverse(wrapped), ast.UnderscoreEmphasisMarker),
+        UnderscoreString(l - 1),
+        ..rest
+      ],
+    )
+    _, _ -> #([], [final, ..previous])
   }
 }
 
@@ -399,48 +425,12 @@ fn do_parse_emphasis(wrapped: List(InlineWrapper), acc: List(InlineWrapper)) {
         False -> do_parse_emphasis(xs, [TildeString(count), ..acc])
       }
     }
-    [TripleAsterisk, ..xs] ->
-      do_parse_emphasis(
-        xs,
-        parse_triple_emphasis(TripleAsterisk, ast.AsteriskEmphasisMarker, acc),
-      )
-    [DoubleAsterisk, ..xs] ->
-      do_parse_emphasis(
-        xs,
-        parse_double_emphasis(DoubleAsterisk, ast.AsteriskEmphasisMarker, acc),
-      )
-    [SingleAsterisk, ..xs] ->
-      do_parse_emphasis(
-        xs,
-        parse_single_emphasis(SingleAsterisk, ast.AsteriskEmphasisMarker, acc),
-      )
-    [TripleUnderscore, ..xs] ->
-      do_parse_emphasis(
-        xs,
-        parse_triple_emphasis(
-          TripleUnderscore,
-          ast.UnderscoreEmphasisMarker,
-          acc,
-        ),
-      )
-    [DoubleUnderscore, ..xs] ->
-      do_parse_emphasis(
-        xs,
-        parse_double_emphasis(
-          DoubleUnderscore,
-          ast.UnderscoreEmphasisMarker,
-          acc,
-        ),
-      )
-    [SingleUnderscore, ..xs] ->
-      do_parse_emphasis(
-        xs,
-        parse_single_emphasis(
-          SingleUnderscore,
-          ast.UnderscoreEmphasisMarker,
-          acc,
-        ),
-      )
+    [AsteriskString(n) as str, ..xs] | [UnderscoreString(n) as str, ..xs]
+      if n > 0
+    -> {
+      let #(prefix, acc) = parse_emphasis(str, acc)
+      do_parse_emphasis(list.concat([prefix, xs]), acc)
+    }
     [x, ..xs] -> do_parse_emphasis(xs, [x, ..acc])
   }
 }
@@ -484,18 +474,10 @@ fn do_parse_inline_ast(
         ast.StrongEmphasis(do_parse_inline_ast(contents, []), marker),
         ..acc
       ])
-    [SingleAsterisk, ..ws] ->
-      do_parse_inline_ast(ws, [ast.PlainText("*"), ..acc])
-    [DoubleAsterisk, ..ws] ->
-      do_parse_inline_ast(ws, [ast.PlainText("**"), ..acc])
-    [TripleAsterisk, ..ws] ->
-      do_parse_inline_ast(ws, [ast.PlainText("***"), ..acc])
-    [SingleUnderscore, ..ws] ->
-      do_parse_inline_ast(ws, [ast.PlainText("_"), ..acc])
-    [DoubleUnderscore, ..ws] ->
-      do_parse_inline_ast(ws, [ast.PlainText("__"), ..acc])
-    [TripleUnderscore, ..ws] ->
-      do_parse_inline_ast(ws, [ast.PlainText("___"), ..acc])
+    [AsteriskString(count), ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText(string.repeat("*", count)), ..acc])
+    [UnderscoreString(count), ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText(string.repeat("_", count)), ..acc])
     [LexedElement(Escaped(s)), ..ws] ->
       do_parse_inline_ast(ws, [ast.PlainText(s), ..acc])
     [LexedElement(Entity(replacement: r, ..)), ..ws] ->
