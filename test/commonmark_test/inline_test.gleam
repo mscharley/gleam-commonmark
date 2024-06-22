@@ -11,3 +11,12 @@ pub fn basic_emphasis_test() {
     ast.PlainText(" c"),
   ])
 }
+
+pub fn handle_partial_emphasis_test() {
+  "*input to*** test**"
+  |> inline.parse_text
+  |> expect.to_equal([
+    ast.Emphasis([ast.PlainText("input to")], ast.AsteriskEmphasisMarker),
+    ast.StrongEmphasis([ast.PlainText(" test")], ast.AsteriskEmphasisMarker),
+  ])
+}

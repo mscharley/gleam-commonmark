@@ -515,36 +515,65 @@ fn trim_right(x: String) -> String {
   x |> string.reverse |> trim_left |> string.reverse
 }
 
-fn do_finalise_plain_text(ast: List(ast.InlineNode), acc: List(ast.InlineNode)) {
+fn do_finalise_plain_text(
+  ast: List(ast.InlineNode),
+  acc: List(ast.InlineNode),
+  trim_ends: Bool,
+) {
   case ast, acc {
-    [], [ast.PlainText(y), ..ys] ->
+    [], [ast.PlainText(y), ..ys] if trim_ends ->
       [ast.PlainText(trim_right(y)), ..ys] |> list.reverse
     [], _ -> acc |> list.reverse
+    [ast.PlainText(""), ..xs], _ -> do_finalise_plain_text(xs, acc, trim_ends)
     [ast.StrongEmphasis(content, marker), ..xs], _ ->
-      do_finalise_plain_text(xs, [
-        ast.StrongEmphasis(do_finalise_plain_text(content, []), marker),
-        ..acc
-      ])
+      do_finalise_plain_text(
+        xs,
+        [
+          ast.StrongEmphasis(do_finalise_plain_text(content, [], False), marker),
+          ..acc
+        ],
+        trim_ends,
+      )
     [ast.Emphasis(content, marker), ..xs], _ ->
-      do_finalise_plain_text(xs, [
-        ast.Emphasis(do_finalise_plain_text(content, []), marker),
-        ..acc
-      ])
+      do_finalise_plain_text(
+        xs,
+        [
+          ast.Emphasis(do_finalise_plain_text(content, [], trim_ends), marker),
+          ..acc
+        ],
+        trim_ends,
+      )
     [ast.StrikeThrough(content), ..xs], _ ->
-      do_finalise_plain_text(xs, [
-        ast.StrikeThrough(do_finalise_plain_text(content, [])),
-        ..acc
-      ])
+      do_finalise_plain_text(
+        xs,
+        [
+          ast.StrikeThrough(do_finalise_plain_text(content, [], trim_ends)),
+          ..acc
+        ],
+        trim_ends,
+      )
     [ast.PlainText(x), ..xs], [ast.PlainText(y), ..ys] ->
-      do_finalise_plain_text(xs, [ast.PlainText(y <> x), ..ys])
+      do_finalise_plain_text(xs, [ast.PlainText(y <> x), ..ys], trim_ends)
     [ast.PlainText(x), ..xs], []
     | [ast.PlainText(x), ..xs], [ast.HardLineBreak, ..]
     | [ast.PlainText(x), ..xs], [ast.SoftLineBreak, ..]
-    -> do_finalise_plain_text(xs, [ast.PlainText(trim_left(x)), ..acc])
+      if trim_ends
+    ->
+      do_finalise_plain_text(
+        xs,
+        [ast.PlainText(trim_left(x)), ..acc],
+        trim_ends,
+      )
     [ast.HardLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
     | [ast.SoftLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
-    -> do_finalise_plain_text(xs, [x, ast.PlainText(trim_right(y)), ..ys])
-    [x, ..xs], _ -> do_finalise_plain_text(xs, [x, ..acc])
+      if trim_ends
+    ->
+      do_finalise_plain_text(
+        xs,
+        [x, ast.PlainText(trim_right(y)), ..ys],
+        trim_ends,
+      )
+    [x, ..xs], _ -> do_finalise_plain_text(xs, [x, ..acc], trim_ends)
   }
 }
 
@@ -555,5 +584,5 @@ pub fn parse_text(text: String) -> List(ast.InlineNode) {
   |> do_parse_inline_wrappers([])
   |> do_parse_emphasis([])
   |> do_parse_inline_ast([])
-  |> do_finalise_plain_text([])
+  |> do_finalise_plain_text([], True)
 }
