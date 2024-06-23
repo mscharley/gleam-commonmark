@@ -52,7 +52,7 @@ const ascii_punctuation = [
   "}", "~",
 ]
 
-fn replace_null_byte(n: Int) {
+fn replace_insecure_byte(n: Int) {
   case list.contains(insecure_codepoints, n) {
     True -> 0xfffd
     False -> n
@@ -115,7 +115,7 @@ fn translate_numerical_entity(
   rest: List(String),
 ) -> Result(#(List(String), String), Nil) {
   codepoint
-  |> result.map(replace_null_byte)
+  |> result.map(replace_insecure_byte)
   |> result.try(string.utf_codepoint)
   |> result.map(fn(cp) { #(rest, string.from_utf_codepoints([cp])) })
 }
@@ -147,131 +147,53 @@ fn match_entity(
 
 fn do_lex_inline_text(
   input: List(String),
-  text: List(String),
   acc: List(InlineLexer),
 ) -> List(InlineLexer) {
   case input {
-    [] ->
-      [Text(text |> list.reverse |> string.join("")), ..acc]
-      |> list.filter(fn(x) { x != Text("") })
-      |> list.reverse
-    ["<", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        LessThan,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    [">", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        GreaterThan,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["[", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        OpenSquareBracket,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["]", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        CloseSquareBracket,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["(", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        OpenBracket,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    [")", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        CloseBracket,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["'", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        SingleQuote,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["\"", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        DoubleQuote,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["!", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        Exclamation,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["`", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        Backtick,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["~", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        Tilde,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["_", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        Underscore,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["*", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        Asterisk,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["\\", "\n", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        HardLineBreak("\\\n"),
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
+    [] -> acc |> list.reverse
+    ["<", ..xs] -> do_lex_inline_text(xs, [LessThan, ..acc])
+    [">", ..xs] -> do_lex_inline_text(xs, [GreaterThan, ..acc])
+    ["[", ..xs] -> do_lex_inline_text(xs, [OpenSquareBracket, ..acc])
+    ["]", ..xs] -> do_lex_inline_text(xs, [CloseSquareBracket, ..acc])
+    ["(", ..xs] -> do_lex_inline_text(xs, [OpenBracket, ..acc])
+    [")", ..xs] -> do_lex_inline_text(xs, [CloseBracket, ..acc])
+    ["'", ..xs] -> do_lex_inline_text(xs, [SingleQuote, ..acc])
+    ["\"", ..xs] -> do_lex_inline_text(xs, [DoubleQuote, ..acc])
+    ["!", ..xs] -> do_lex_inline_text(xs, [Exclamation, ..acc])
+    ["`", ..xs] -> do_lex_inline_text(xs, [Backtick, ..acc])
+    ["~", ..xs] -> do_lex_inline_text(xs, [Tilde, ..acc])
+    ["_", ..xs] -> do_lex_inline_text(xs, [Underscore, ..acc])
+    ["*", ..xs] -> do_lex_inline_text(xs, [Asterisk, ..acc])
+    ["\\", "\n", ..xs] -> do_lex_inline_text(xs, [HardLineBreak("\\\n"), ..acc])
     [" ", " ", "\n", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        HardLineBreak("  \n"),
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
-    ["\n", ..xs] ->
-      do_lex_inline_text(xs, [], [
-        SoftLineBreak,
-        Text(text |> list.reverse |> string.join("")),
-        ..acc
-      ])
+      do_lex_inline_text(xs, [HardLineBreak("  \n"), ..acc])
+    ["\n", ..xs] -> do_lex_inline_text(xs, [SoftLineBreak, ..acc])
     ["&", ..xs] ->
       case match_entity(xs) {
         Ok(#(rest, e, replacement)) ->
-          do_lex_inline_text(rest, [], [
-            Entity(e, replacement),
-            Text(text |> list.reverse |> string.join("")),
-            ..acc
-          ])
-        Error(_) -> do_lex_inline_text(xs, ["&", ..text], acc)
+          do_lex_inline_text(rest, [Entity(e, replacement), ..acc])
+        Error(_) ->
+          case acc {
+            [Text(t), ..rest] ->
+              do_lex_inline_text(xs, [Text(t <> "&"), ..rest])
+            _ -> do_lex_inline_text(xs, [Text("&"), ..acc])
+          }
       }
     ["\\", g, ..xs] ->
       case list.contains(ascii_punctuation, g) {
-        True ->
-          do_lex_inline_text(xs, [], [
-            Escaped(g),
-            Text(text |> list.reverse |> string.join("")),
-            ..acc
-          ])
-        False -> do_lex_inline_text(xs, [g, "\\", ..text], acc)
+        True -> do_lex_inline_text(xs, [Escaped(g), ..acc])
+        False ->
+          case acc {
+            [Text(t), ..rest] ->
+              do_lex_inline_text(xs, [Text(t <> "\\" <> g), ..rest])
+            _ -> do_lex_inline_text(xs, [Text("\\" <> g), ..acc])
+          }
       }
-    [x, ..xs] -> do_lex_inline_text(xs, [x, ..text], acc)
+    [x, ..xs] ->
+      case acc {
+        [Text(t), ..rest] -> do_lex_inline_text(xs, [Text(t <> x), ..rest])
+        _ -> do_lex_inline_text(xs, [Text(x), ..acc])
+      }
   }
 }
 
@@ -657,7 +579,7 @@ fn do_finalise_plain_text(
 pub fn parse_text(text: String) -> List(ast.InlineNode) {
   text
   |> string.to_graphemes
-  |> do_lex_inline_text([], [])
+  |> do_lex_inline_text([])
   |> do_parse_inline_wrappers([])
   |> do_parse_emphasis([])
   |> do_parse_inline_ast([])
