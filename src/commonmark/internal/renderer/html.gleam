@@ -110,11 +110,15 @@ fn tight_list_item(
   all: fn(List(a)) -> b,
   try: fn(b, fn(List(String)) -> a) -> a,
   map: fn(a, fn(String) -> String) -> a,
+  map_pair: fn(#(a, a), fn(#(String, String)) -> String) -> a,
   unit: fn(String) -> a,
 ) -> a {
+  let count = list.length(contents)
   let r = contents |> list.reverse
   use rest <- try(
     r
+    |> list.drop(1)
+    |> list.reverse
     |> list.drop(1)
     |> list.map(fn(b) {
       case b {
@@ -123,15 +127,30 @@ fn tight_list_item(
         _ -> f(b, refs, True)
       }
     })
-    |> list.reverse
     |> all,
   )
-  use last <- map(case list.first(r) {
-    Ok(block) -> f(block, refs, True)
-    Error(_) -> unit("")
+  use #(first, last) <- map_pair(case
+    count,
+    list.first(contents),
+    list.first(r)
+  {
+    0, _, _ | _, Error(_), _ | _, _, Error(_) -> #(unit(""), unit(""))
+    1, Ok(ast.Paragraph(_) as p), _ -> #(f(p, refs, True), unit(""))
+    1, Ok(block), _ -> #(
+      f(block, refs, True) |> map(fn(x) { "\n" <> x }),
+      unit(""),
+    )
+    _, Ok(ast.Paragraph(_) as p), Ok(last) -> #(
+      f(p, refs, True) |> map(fn(x) { x <> "\n" }),
+      f(last, refs, True),
+    )
+    _, Ok(first), Ok(last) -> #(
+      f(first, refs, True) |> map(fn(x) { "\n" <> x }),
+      f(last, refs, True),
+    )
   })
 
-  "<li>" <> string.join(rest, "") <> last <> "</li>\n"
+  "<li>" <> first <> string.join(rest, "") <> last <> "</li>\n"
 }
 
 fn list_item_to_html(
@@ -153,6 +172,14 @@ fn list_item_to_html(
         result.all,
         result.try,
         result.map,
+        fn(
+          x: #(Result(String, ast.RenderError), Result(String, ast.RenderError)),
+          f: fn(#(String, String)) -> String,
+        ) -> Result(String, ast.RenderError) {
+          use first <- result.try(x.0)
+          use last <- result.try(x.1)
+          Ok(f(#(first, last)))
+        },
         Ok,
       )
     }
@@ -174,6 +201,7 @@ fn list_item_to_html_safe(
         refs,
         block_to_html_safe,
         identity,
+        passthrough,
         passthrough,
         passthrough,
         identity,
