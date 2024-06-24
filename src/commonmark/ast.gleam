@@ -75,6 +75,15 @@ pub type UnorderedListMarker {
   AsteriskListMarker
 }
 
+/// The level of the alert.
+pub type AlertLevel {
+  NoteAlert
+  TipAlert
+  ImportantAlert
+  WarningAlert
+  CautionAlert
+}
+
 /// Block nodes are used to define the overall structure of a document.
 pub type BlockNode {
   HorizontalBreak
@@ -83,6 +92,7 @@ pub type BlockNode {
   HtmlBlock(html: String)
   Paragraph(contents: List(InlineNode))
   BlockQuote(contents: List(BlockNode))
+  AlertBlock(level: AlertLevel, contents: List(BlockNode))
   OrderedList(contents: List(ListItem), start: Int, marker: OrderedListMarker)
   UnorderedList(contents: List(ListItem), marker: UnorderedListMarker)
 }

@@ -310,7 +310,7 @@ pub fn block_to_html(
   tight: Bool,
 ) -> Result(String, ast.RenderError) {
   case block {
-    ast.BlockQuote(contents) ->
+    ast.AlertBlock(_, contents) | ast.BlockQuote(contents) ->
       contents
       |> list.map(block_to_html(_, refs, False))
       |> result.all
@@ -358,7 +358,7 @@ pub fn block_to_html_safe(
   tight: Bool,
 ) -> String {
   case block {
-    ast.BlockQuote(contents) ->
+    ast.AlertBlock(_, contents) | ast.BlockQuote(contents) ->
       blockquote(contents |> list.map(block_to_html_safe(_, refs, False)))
     ast.CodeBlock(language, _, contents) ->
       code(contents |> sanitize_plain_text, language)
