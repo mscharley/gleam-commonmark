@@ -71,7 +71,20 @@ fn inline_to_html_safe(
     ast.StrikeThrough(contents) ->
       "<del>" <> inline_list_to_html_safe(contents, refs) <> "</del>"
     ast.ReferenceImage(_, _) -> "Image"
-    ast.Image(_, _, _) -> "Image"
+    ast.Image(alt, title, href) -> {
+      let title =
+        title
+        |> option.map(fn(t) { " title=\"" <> sanitize_plain_text(t) <> "\"" })
+        |> option.unwrap("")
+
+      "<img src=\""
+      <> sanitize_href_property(href)
+      <> "\" alt=\""
+      <> alt
+      <> "\""
+      <> title
+      <> " />"
+    }
     ast.ReferenceLink(_, _) -> "Link"
     ast.Link(contents, title, href) -> {
       let title =
@@ -106,7 +119,22 @@ fn inline_to_html(
       |> result.map(fn(c) { "<del>" <> c <> "</del>" })
     ast.HtmlInline(html) -> Ok(html)
     ast.ReferenceImage(_, _) -> Ok("Image")
-    ast.Image(_, _, _) -> Ok("Image")
+    ast.Image(alt, title, href) -> {
+      let title =
+        title
+        |> option.map(fn(t) { " title=\"" <> sanitize_plain_text(t) <> "\"" })
+        |> option.unwrap("")
+
+      Ok(
+        "<img src=\""
+        <> sanitize_href_property(href)
+        <> "\" alt=\""
+        <> alt
+        <> "\""
+        <> title
+        <> " />",
+      )
+    }
     ast.ReferenceLink(_, _) -> Ok("Link")
     ast.Link(contents, title, href) -> {
       let title =

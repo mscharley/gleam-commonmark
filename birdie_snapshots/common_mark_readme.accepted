@@ -11,13 +11,41 @@ Document(
       [PlainText("commonmark")],
     ),
     Paragraph([
-      PlainText("[![Package Version](https://img.shields.io/hexpm/v/commonmark)](https://hex.pm/packages/commonmark)"),
+      Link(
+        [
+          Image(
+            "Package Version",
+            None,
+            "https://img.shields.io/hexpm/v/commonmark",
+          ),
+        ],
+        None,
+        "https://hex.pm/packages/commonmark",
+      ),
       SoftLineBreak,
-      PlainText("[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/commonmark/)"),
+      Link(
+        [
+          Image(
+            "Hex Docs",
+            None,
+            "https://img.shields.io/badge/hex-docs-ffaff3",
+          ),
+        ],
+        None,
+        "https://hexdocs.pm/commonmark/",
+      ),
       SoftLineBreak,
-      PlainText("![Erlang-compatible](https://img.shields.io/badge/target-erlang-b83998)"),
+      Image(
+        "Erlang-compatible",
+        None,
+        "https://img.shields.io/badge/target-erlang-b83998",
+      ),
       SoftLineBreak,
-      PlainText("![JavaScript-compatible](https://img.shields.io/badge/target-javascript-f1e05a)"),
+      Image(
+        "JavaScript-compatible",
+        None,
+        "https://img.shields.io/badge/target-javascript-f1e05a",
+      ),
     ]),
     CodeBlock(
       Some("sh"),
@@ -165,12 +193,12 @@ This is a test."
         ]),
         TightListItem([
           Paragraph([
-            PlainText("❌ Links"),
+            PlainText("🚧 Links"),
           ]),
         ]),
         TightListItem([
           Paragraph([
-            PlainText("❌ Images"),
+            PlainText("🚧 Images"),
           ]),
         ]),
         TightListItem([

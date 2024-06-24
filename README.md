@@ -58,8 +58,8 @@ The current version of CommonMark targetted is [0.31.2][commonmark].
 * 🚧 Unordered lists
 * ✅ Code spans
 * 🚧 Emphasis and strong emphasis
-* ❌ Links
-* ❌ Images
+* 🚧 Links
+* 🚧 Images
 * ✅ Autolinks
 * ✅ Hard line breaks
 * ✅ Soft line breaks
