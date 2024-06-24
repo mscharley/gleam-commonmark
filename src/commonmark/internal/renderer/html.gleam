@@ -12,6 +12,7 @@ pub fn sanitize_href_property(prop: String) -> String {
   |> string.replace("&", "&amp;")
   |> string.replace("\"", "%22")
   |> string.replace("\\", "%5C")
+  |> string.replace(" ", "%20")
 }
 
 pub fn sanitize_plain_text(text: String) -> String {
@@ -72,7 +73,20 @@ fn inline_to_html_safe(
     ast.ReferenceImage(_, _) -> "Image"
     ast.Image(_, _, _) -> "Image"
     ast.ReferenceLink(_, _) -> "Link"
-    ast.Link(_, _, _) -> "Link"
+    ast.Link(contents, title, href) -> {
+      let title =
+        title
+        |> option.map(fn(t) { " title=\"" <> sanitize_plain_text(t) <> "\"" })
+        |> option.unwrap("")
+
+      "<a href=\""
+      <> sanitize_href_property(href)
+      <> "\""
+      <> title
+      <> ">"
+      <> inline_list_to_html_safe(contents, refs)
+      <> "</a>"
+    }
   }
 }
 
@@ -94,7 +108,23 @@ fn inline_to_html(
     ast.ReferenceImage(_, _) -> Ok("Image")
     ast.Image(_, _, _) -> Ok("Image")
     ast.ReferenceLink(_, _) -> Ok("Link")
-    ast.Link(_, _, _) -> Ok("Link")
+    ast.Link(contents, title, href) -> {
+      let title =
+        title
+        |> option.map(fn(t) { " title=\"" <> sanitize_plain_text(t) <> "\"" })
+        |> option.unwrap("")
+
+      inline_list_to_html(contents, refs)
+      |> result.map(fn(c) {
+        "<a href=\""
+        <> sanitize_href_property(href)
+        <> "\""
+        <> title
+        <> ">"
+        <> c
+        <> "</a>"
+      })
+    }
     _ -> Ok(inline_to_html_safe(inline, refs))
   }
 }

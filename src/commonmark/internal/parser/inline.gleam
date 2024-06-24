@@ -2,7 +2,7 @@ import commonmark/ast
 import commonmark/internal/parser/entity
 import gleam/int
 import gleam/list
-import gleam/option.{Some}
+import gleam/option.{type Option, None, Some}
 import gleam/regex.{Match}
 import gleam/result
 import gleam/string
@@ -20,6 +20,7 @@ type InlineLexer {
   Underscore
   OpenBracket
   CloseBracket
+  ImageStart
   OpenSquareBracket
   CloseSquareBracket
   SingleQuote
@@ -37,6 +38,7 @@ type InlineWrapper {
   TildeString(Int)
   AsteriskString(Int)
   UnderscoreString(Int)
+  UriLink(List(InlineWrapper), href: String, title: Option(String))
   Emphasis(List(InlineWrapper), ast.EmphasisMarker)
   StrongEmphasis(List(InlineWrapper), ast.EmphasisMarker)
   CodeSpan(Int, List(InlineWrapper))
@@ -77,6 +79,7 @@ fn to_string(el: InlineWrapper) {
     LexedElement(Entity(name: e, ..)) -> "&" <> e
     LexedElement(OpenBracket) -> "("
     LexedElement(CloseBracket) -> ")"
+    LexedElement(ImageStart) -> "!["
     LexedElement(OpenSquareBracket) -> "["
     LexedElement(CloseSquareBracket) -> "]"
     LexedElement(SingleQuote) -> "'"
@@ -106,6 +109,12 @@ fn to_string(el: InlineWrapper) {
       <> string.repeat("~", count)
     EmailAutolink(ls) -> "<" <> list_to_string(ls) <> ">"
     UriAutolink(ls) -> "<" <> list_to_string(ls) <> ">"
+    // This is approximate and potentially not even valid, but should never actually run in practice.
+    UriLink(content, href, title) -> {
+      let title =
+        title |> option.map(fn(t) { " '" <> t <> "'" }) |> option.unwrap("")
+      "[" <> list_to_string(content) <> "](<" <> href <> ">" <> title <> ")"
+    }
   }
 }
 
@@ -156,6 +165,7 @@ fn do_lex_inline_text(
     [] -> acc |> list.reverse
     ["<", ..xs] -> do_lex_inline_text(xs, [LessThan, ..acc])
     [">", ..xs] -> do_lex_inline_text(xs, [GreaterThan, ..acc])
+    ["!", "[", ..xs] -> do_lex_inline_text(xs, [ImageStart, ..acc])
     ["[", ..xs] -> do_lex_inline_text(xs, [OpenSquareBracket, ..acc])
     ["]", ..xs] -> do_lex_inline_text(xs, [CloseSquareBracket, ..acc])
     ["(", ..xs] -> do_lex_inline_text(xs, [OpenBracket, ..acc])
@@ -327,7 +337,8 @@ fn do_parse_inline_wrappers(
 
       do_parse_inline_wrappers(ls, [TildeString(count), ..acc])
     }
-    [Exclamation as v, ..ls]
+    [ImageStart as v, ..ls]
+    | [Exclamation as v, ..ls]
     | [SingleQuote as v, ..ls]
     | [DoubleQuote as v, ..ls]
     | [OpenBracket as v, ..ls]
@@ -411,22 +422,119 @@ fn parse_emphasis(final: InlineWrapper, previous: List(InlineWrapper)) {
   }
 }
 
-fn do_parse_emphasis(wrapped: List(InlineWrapper), acc: List(InlineWrapper)) {
+fn parse_link_title(
+  contents: List(InlineWrapper),
+  href: String,
+  ls: List(InlineWrapper),
+) -> Result(#(InlineWrapper, List(InlineWrapper)), Nil) {
+  let is_not = fn(x) { fn(y) { x != y } }
+  case ls {
+    [LexedElement(SingleQuote), ..ls] ->
+      case list.split_while(ls, is_not(LexedElement(SingleQuote))) {
+        #(title, [_, LexedElement(CloseBracket), ..ls]) ->
+          Ok(#(UriLink(contents, href, Some(list_to_string(title))), ls))
+        _ -> Error(Nil)
+      }
+    [LexedElement(DoubleQuote), ..ls] ->
+      case list.split_while(ls, is_not(LexedElement(DoubleQuote))) {
+        #(title, [_, LexedElement(CloseBracket), ..ls]) ->
+          Ok(#(UriLink(contents, href, Some(list_to_string(title))), ls))
+        _ -> Error(Nil)
+      }
+    [LexedElement(OpenBracket), ..ls] ->
+      case list.split_while(ls, is_not(LexedElement(CloseBracket))) {
+        #(title, [_, LexedElement(CloseBracket), ..ls]) ->
+          Ok(#(UriLink(contents, href, Some(list_to_string(title))), ls))
+        _ -> Error(Nil)
+      }
+    _ -> Error(Nil)
+  }
+}
+
+fn is_not_end_of_href(v: InlineWrapper) -> Bool {
+  case v {
+    LexedElement(GreaterThan)
+    | LexedElement(SoftLineBreak)
+    | LexedElement(HardLineBreak(_)) -> False
+    _ -> True
+  }
+}
+
+fn parse_link(
+  contents: List(InlineWrapper),
+  ls: List(InlineWrapper),
+) -> Result(#(InlineWrapper, List(InlineWrapper)), Nil) {
+  case ls {
+    [
+      LexedElement(OpenBracket),
+      LexedElement(LessThan),
+      LexedElement(GreaterThan),
+      LexedElement(CloseBracket),
+      ..ls
+    ]
+    | [LexedElement(OpenBracket), LexedElement(CloseBracket), ..ls] ->
+      Ok(#(UriLink(contents, "", None), ls))
+    [
+      LexedElement(OpenBracket),
+      LexedElement(Word(href)),
+      LexedElement(CloseBracket),
+      ..ls
+    ] -> Ok(#(UriLink(contents, href, None), ls))
+    [
+      LexedElement(OpenBracket),
+      LexedElement(Word(href)),
+      LexedElement(WhiteSpace(_)),
+      ..ls
+    ] -> parse_link_title(contents, href, ls)
+    [LexedElement(OpenBracket), LexedElement(LessThan), ..ls] ->
+      case list.split_while(ls, is_not_end_of_href) {
+        #(href, [LexedElement(GreaterThan), LexedElement(CloseBracket), ..ls]) ->
+          Ok(#(UriLink(contents, list_to_string(href), None), ls))
+        #(href, [LexedElement(GreaterThan), LexedElement(WhiteSpace(_)), ..ls]) ->
+          parse_link_title(contents, list_to_string(href), ls)
+        _ -> Error(Nil)
+      }
+    _ -> Error(Nil)
+  }
+}
+
+fn is_not_link_or_image_start(v: InlineWrapper) -> Bool {
+  case v {
+    LexedElement(ImageStart) -> False
+    LexedElement(OpenSquareBracket) -> False
+    LexedElement(CloseSquareBracket) -> False
+    _ -> True
+  }
+}
+
+fn do_late_binding(wrapped: List(InlineWrapper), acc: List(InlineWrapper)) {
   case wrapped {
     [] -> acc |> list.reverse
+    [LexedElement(CloseSquareBracket), ..ls] -> {
+      case list.split_while(acc, is_not_link_or_image_start) {
+        #(to_wrap, [LexedElement(OpenSquareBracket), ..rest]) -> {
+          case parse_link(to_wrap |> list.reverse, ls) {
+            Ok(#(wrapped, ls)) -> do_late_binding(ls, [wrapped, ..rest])
+            Error(_) ->
+              do_late_binding(ls, [LexedElement(CloseSquareBracket), ..acc])
+          }
+        }
+        _ -> do_late_binding(ls, [LexedElement(CloseSquareBracket), ..acc])
+      }
+    }
     [TildeString(count), ..xs] -> {
       case count <= 2 {
-        True -> do_parse_emphasis(xs, parse_strikethrough(count, acc))
-        False -> do_parse_emphasis(xs, [TildeString(count), ..acc])
+        True -> do_late_binding(xs, parse_strikethrough(count, acc))
+        False -> do_late_binding(xs, [TildeString(count), ..acc])
       }
     }
     [AsteriskString(n) as str, ..xs] | [UnderscoreString(n) as str, ..xs]
       if n > 0
     -> {
       let #(prefix, acc) = parse_emphasis(str, acc)
-      do_parse_emphasis(list.concat([prefix, xs]), acc)
+      do_late_binding(list.concat([prefix, xs]), acc)
     }
-    [x, ..xs] -> do_parse_emphasis(xs, [x, ..acc])
+    [x, ..xs] -> do_late_binding(xs, [x, ..acc])
   }
 }
 
@@ -440,6 +548,11 @@ fn do_parse_inline_ast(
       do_parse_inline_ast(ws, [ast.EmailAutolink(list_to_string(l)), ..acc])
     [UriAutolink(l), ..ws] ->
       do_parse_inline_ast(ws, [ast.UriAutolink(list_to_string(l)), ..acc])
+    [UriLink(contents, href, title), ..ws] ->
+      do_parse_inline_ast(ws, [
+        ast.Link(do_parse_inline_ast(contents, []), title, href),
+        ..acc
+      ])
     [BacktickString(count), ..ws] ->
       do_parse_inline_ast(ws, [ast.PlainText(string.repeat("`", count)), ..acc])
     [CodeSpan(_, contents), ..ws] -> {
@@ -485,6 +598,8 @@ fn do_parse_inline_ast(
       do_parse_inline_ast(ws, [ast.PlainText("("), ..acc])
     [LexedElement(CloseBracket), ..ws] ->
       do_parse_inline_ast(ws, [ast.PlainText(")"), ..acc])
+    [LexedElement(ImageStart), ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText("!["), ..acc])
     [LexedElement(OpenSquareBracket), ..ws] ->
       do_parse_inline_ast(ws, [ast.PlainText("["), ..acc])
     [LexedElement(CloseSquareBracket), ..ws] ->
@@ -593,7 +708,7 @@ pub fn parse_text(text: String) -> List(ast.InlineNode) {
   |> string.to_graphemes
   |> do_lex_inline_text([])
   |> do_parse_inline_wrappers([])
-  |> do_parse_emphasis([])
+  |> do_late_binding([])
   |> do_parse_inline_ast([])
   |> do_finalise_plain_text([], True)
 }
