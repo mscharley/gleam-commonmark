@@ -10,7 +10,8 @@ import gleam/string
 type InlineLexer {
   Entity(name: String, replacement: String)
   Escaped(String)
-  Text(String)
+  Word(String)
+  WhiteSpace(String)
   LessThan
   GreaterThan
   Backtick
@@ -62,7 +63,9 @@ fn replace_insecure_byte(n: Int) {
 /// "Unlex" an element back to it's raw form
 fn to_string(el: InlineWrapper) {
   case el {
-    LexedElement(HardLineBreak(s)) | LexedElement(Text(s)) -> s
+    LexedElement(HardLineBreak(s))
+    | LexedElement(Word(s))
+    | LexedElement(WhiteSpace(s)) -> s
     LexedElement(Escaped(s)) -> "\\" <> s
     LexedElement(LessThan) -> "<"
     LexedElement(GreaterThan) -> ">"
@@ -174,9 +177,9 @@ fn do_lex_inline_text(
           do_lex_inline_text(rest, [Entity(e, replacement), ..acc])
         Error(_) ->
           case acc {
-            [Text(t), ..rest] ->
-              do_lex_inline_text(xs, [Text(t <> "&"), ..rest])
-            _ -> do_lex_inline_text(xs, [Text("&"), ..acc])
+            [Word(t), ..rest] ->
+              do_lex_inline_text(xs, [Word(t <> "&"), ..rest])
+            _ -> do_lex_inline_text(xs, [Word("&"), ..acc])
           }
       }
     ["\\", g, ..xs] ->
@@ -184,15 +187,21 @@ fn do_lex_inline_text(
         True -> do_lex_inline_text(xs, [Escaped(g), ..acc])
         False ->
           case acc {
-            [Text(t), ..rest] ->
-              do_lex_inline_text(xs, [Text(t <> "\\" <> g), ..rest])
-            _ -> do_lex_inline_text(xs, [Text("\\" <> g), ..acc])
+            [Word(t), ..rest] ->
+              do_lex_inline_text(xs, [Word(t <> "\\" <> g), ..rest])
+            _ -> do_lex_inline_text(xs, [Word("\\" <> g), ..acc])
           }
+      }
+    [" " as w, ..xs] | ["\t" as w, ..xs] ->
+      case acc {
+        [WhiteSpace(ww), ..rest] ->
+          do_lex_inline_text(xs, [WhiteSpace(ww <> w), ..rest])
+        _ -> do_lex_inline_text(xs, [WhiteSpace(w), ..acc])
       }
     [x, ..xs] ->
       case acc {
-        [Text(t), ..rest] -> do_lex_inline_text(xs, [Text(t <> x), ..rest])
-        _ -> do_lex_inline_text(xs, [Text(x), ..acc])
+        [Word(t), ..rest] -> do_lex_inline_text(xs, [Word(t <> x), ..rest])
+        _ -> do_lex_inline_text(xs, [Word(x), ..acc])
       }
   }
 }
@@ -330,7 +339,8 @@ fn do_parse_inline_wrappers(
     | [LessThan as v, ..ls]
     | [HardLineBreak(_) as v, ..ls]
     | [SoftLineBreak as v, ..ls]
-    | [Text(_) as v, ..ls] ->
+    | [WhiteSpace(_) as v, ..ls]
+    | [Word(_) as v, ..ls] ->
       do_parse_inline_wrappers(ls, [LexedElement(v), ..acc])
   }
 }
@@ -472,32 +482,34 @@ fn do_parse_inline_ast(
     [LexedElement(HardLineBreak(_)), ..ws] ->
       do_parse_inline_ast(ws, [ast.HardLineBreak, ..acc])
     [LexedElement(OpenBracket), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("(")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("("), ..acc])
     [LexedElement(CloseBracket), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text(")")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText(")"), ..acc])
     [LexedElement(OpenSquareBracket), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("[")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("["), ..acc])
     [LexedElement(CloseSquareBracket), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("]")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("]"), ..acc])
     [LexedElement(SingleQuote), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("'")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("'"), ..acc])
     [LexedElement(DoubleQuote), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("\"")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("\""), ..acc])
     [LexedElement(Exclamation), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("!")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("!"), ..acc])
     [LexedElement(Asterisk), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("*")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("*"), ..acc])
     [LexedElement(Underscore), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("_")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("_"), ..acc])
     [LexedElement(Backtick), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("`")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("`"), ..acc])
     [LexedElement(Tilde), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("~")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText("~"), ..acc])
     [LexedElement(GreaterThan), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text(">")), ..ws], acc)
+      do_parse_inline_ast(ws, [ast.PlainText(">"), ..acc])
     [LexedElement(LessThan), ..ws] ->
-      do_parse_inline_ast([LexedElement(Text("<")), ..ws], acc)
-    [LexedElement(Text(t)), ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText("<"), ..acc])
+    [LexedElement(WhiteSpace(t)), ..ws] ->
+      do_parse_inline_ast(ws, [ast.PlainText(t), ..acc])
+    [LexedElement(Word(t)), ..ws] ->
       do_parse_inline_ast(ws, [ast.PlainText(t), ..acc])
   }
 }
