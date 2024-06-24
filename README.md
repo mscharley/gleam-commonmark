@@ -33,9 +33,14 @@ There is also an [interactive demo][demo] which you can use to test how this lib
 
 ## Syntax support
 
-🚧 This package is still heavily under construction 🚧
+> [!WARNING]
+> 🚧 This package is still heavily under construction 🚧
 
-✅ - Completed | 🚧 - In Progress | ❌ - Unsupported
+### Legend
+
+* ✅ - Completed
+* 🚧 - In Progress
+* ❌ - Unsupported
 
 ### CommonMark
 
@@ -74,6 +79,12 @@ The current version of GFM targetted is [0.29-gfm][gfm].
 * ✅ Strikethrough
 
 [gfm]: https://github.github.com/gfm/
+
+### Other extensions
+
+* ❌ [Github alerts][github-alert]
+
+[github-alert]: https://github.com/orgs/community/discussions/16925
 
 ## Development
 

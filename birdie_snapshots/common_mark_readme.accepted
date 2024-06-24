@@ -66,12 +66,34 @@ This is a test."
       2,
       [PlainText("Syntax support")],
     ),
-    Paragraph([
-      PlainText("🚧 This package is still heavily under construction 🚧"),
+    BlockQuote([
+      Paragraph([
+        PlainText("[!WARNING]"),
+        SoftLineBreak,
+        PlainText("🚧 This package is still heavily under construction 🚧"),
+      ]),
     ]),
-    Paragraph([
-      PlainText("✅ - Completed | 🚧 - In Progress | ❌ - Unsupported"),
-    ]),
+    Heading(3, [PlainText("Legend")]),
+    UnorderedList(
+      [
+        TightListItem([
+          Paragraph([
+            PlainText("✅ - Completed"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            PlainText("🚧 - In Progress"),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            PlainText("❌ - Unsupported"),
+          ]),
+        ]),
+      ],
+      AsteriskListMarker,
+    ),
     Heading(
       3,
       [PlainText("CommonMark")],
@@ -216,6 +238,23 @@ This is a test."
     ),
     Paragraph([
       PlainText("[gfm]: https://github.github.com/gfm/"),
+    ]),
+    Heading(
+      3,
+      [PlainText("Other extensions")],
+    ),
+    UnorderedList(
+      [
+        TightListItem([
+          Paragraph([
+            PlainText("❌ [Github alerts][github-alert]"),
+          ]),
+        ]),
+      ],
+      AsteriskListMarker,
+    ),
+    Paragraph([
+      PlainText("[github-alert]: https://github.com/orgs/community/discussions/16925"),
     ]),
     Heading(
       2,
