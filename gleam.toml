@@ -3,7 +3,7 @@
 
 name = "commonmark"
 version = "0.1.8"
-description = "CommonMark implementation for Gleam, for the BEAM or JS"
+description = "CommonMark/Markdown implementation for Gleam, for the BEAM or JS"
 licenses = ["MIT"]
 links = [
 	{ title = "Demo", href = "https://mscharley.github.io/gleam-commonmark/" },
