@@ -11,7 +11,7 @@ links = [
 ]
 
 [javascript]
-#typescript_declarations = true
+typescript_declarations = true
 
 [repository]
 type = "github"

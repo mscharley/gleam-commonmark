@@ -1,0 +1,44 @@
+{
+	"name": "@mscharley/commonmark",
+	"version": "0.1.8",
+	"type": "module",
+	"description": "CommonMark/Markdown implementation written in Gleam",
+	"main": "lib/commonmark.js",
+	"types": "lib/commonmark.d.ts",
+	"exports": {
+		".": {
+			"import": "./lib/commonmark.js",
+			"types": "./lib/commonmark.d.ts"
+		},
+		"./ast": {
+			"import": "./lib/commonmark/ast.js",
+			"types": "./lib/commonmark/ast.d.ts"
+		}
+	},
+	"scripts": {
+		"build": "esbuild ../build/dev/javascript/commonmark/{commonmark.mjs,commonmark/ast.mjs} --outdir=lib --bundle --format=esm --splitting && (api-extractor run; api-extractor run -c api-extractor.ast.json) || true"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mscharley/gleam-commonmark.git"
+	},
+	"keywords": [
+		"commonmark",
+		"markdown"
+	],
+	"author": "Matthew Scharley <matt@scharley.me>",
+	"license": "MIT",
+	"funding": {
+		"type": "individual",
+		"url": "https://github.com/sponsors/mscharley"
+	},
+	"bugs": {
+		"url": "https://github.com/mscharley/gleam-commonmark/issues"
+	},
+	"homepage": "https://github.com/mscharley/gleam-commonmark#readme",
+	"devDependencies": {
+		"@microsoft/api-extractor": "^7.47.0",
+		"@types/node": "^20.14.8",
+		"esbuild": "^0.21.5"
+	}
+}
