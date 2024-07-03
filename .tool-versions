@@ -1,4 +1,4 @@
-gleam 1.2.1
+gleam 1.3.0-rc1
 erlang 27.0
 rebar 3.23.0
 nodejs 20.13.1
