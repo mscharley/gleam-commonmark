@@ -82,7 +82,7 @@ The current version of GFM targetted is [0.29-gfm][gfm].
 
 ### Other extensions
 
-* ❌ [Github alerts][github-alert]
+* ✅ [Github alerts][github-alert]
 
 [github-alert]: https://github.com/orgs/community/discussions/16925
 

@@ -94,13 +94,14 @@ This is a test."
       2,
       [PlainText("Syntax support")],
     ),
-    BlockQuote([
-      Paragraph([
-        PlainText("[!WARNING]"),
-        SoftLineBreak,
-        PlainText("🚧 This package is still heavily under construction 🚧"),
-      ]),
-    ]),
+    AlertBlock(
+      WarningAlert,
+      [
+        Paragraph([
+          PlainText("🚧 This package is still heavily under construction 🚧"),
+        ]),
+      ],
+    ),
     Heading(3, [PlainText("Legend")]),
     UnorderedList(
       [
@@ -275,7 +276,7 @@ This is a test."
       [
         TightListItem([
           Paragraph([
-            PlainText("❌ [Github alerts][github-alert]"),
+            PlainText("✅ [Github alerts][github-alert]"),
           ]),
         ]),
       ],

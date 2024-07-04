@@ -23,6 +23,7 @@ type BlockState {
     Int,
   )
   IndentedCodeBlockBuilder(List(String))
+  AlertBuilder(ast.AlertLevel, List(String))
   BlockQuoteBuilder(List(String))
   UnorderedListBuilder(
     List(String),
@@ -47,6 +48,7 @@ type BlockParseState {
   Heading(Int, Option(String))
   CodeBlock(Option(String), Option(String), String)
   BlockQuote(List(BlockParseState))
+  Alert(ast.AlertLevel, List(BlockParseState))
   UnorderedList(List(List(BlockParseState)), Bool, ast.UnorderedListMarker)
   OrderedList(List(List(BlockParseState)), Int, Bool, ast.OrderedListMarker)
 }
@@ -70,6 +72,13 @@ fn parse_block_state(
       dict.new(),
     )
     Heading(level, None) -> #(ast.Heading(level, []), dict.new())
+    Alert(level, blocks) -> {
+      blocks
+      |> list.map(parse_block_state)
+      |> list.unzip
+      |> pair.map_first(fn(bs) { ast.AlertBlock(level, bs) })
+      |> pair.map_second(merge_references)
+    }
     BlockQuote(blocks) -> {
       blocks
       |> list.map(parse_block_state)
@@ -253,6 +262,9 @@ fn do_parse_blocks(
         ),
         ..acc
       ]
+      |> list.reverse
+    AlertBuilder(level, bs), [] ->
+      [Alert(level, bs |> list.reverse |> parse_blocks), ..acc]
       |> list.reverse
     BlockQuoteBuilder(bs), [] ->
       [BlockQuote(bs |> list.reverse |> parse_blocks), ..acc]
@@ -771,7 +783,35 @@ fn do_parse_blocks(
         acc,
         ls,
       )
-    // Block quotes
+    // Block quotes and alerts
+    AlertBuilder(level, bs), [_, ..ls] if is_block_quote ->
+      case block_quote_results {
+        Ok([None]) | Ok([]) ->
+          do_parse_blocks(AlertBuilder(level, ["", ..bs]), acc, ls)
+        Ok([Some(l)]) ->
+          do_parse_blocks(AlertBuilder(level, [l, ..bs]), acc, ls)
+        _ ->
+          panic as {
+            "Invalid block quote parser state: "
+            <> string.inspect(block_quote_results)
+          }
+      }
+    AlertBuilder(level, bs), [l, ..ls] ->
+      case
+        bs
+        |> list.reverse
+        |> parse_blocks
+        |> list.last
+      {
+        Ok(Paragraph(_)) | Ok(BlockQuote(_)) if is_paragraph && !is_blank_line ->
+          do_parse_blocks(AlertBuilder(level, [l, ..bs]), acc, ls)
+        _ ->
+          do_parse_blocks(
+            OutsideBlock,
+            [Alert(level, bs |> list.reverse |> parse_blocks), ..acc],
+            [l, ..ls],
+          )
+      }
     BlockQuoteBuilder(bs), [_, ..ls] if is_block_quote ->
       case block_quote_results {
         Ok([None]) | Ok([]) ->
@@ -801,6 +841,36 @@ fn do_parse_blocks(
       }
     ParagraphBuilder(bs), [_, ..ls] if is_block_quote ->
       case block_quote_results {
+        Ok([Some("[!NOTE]")]) ->
+          do_parse_blocks(
+            AlertBuilder(ast.NoteAlert, []),
+            [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
+            ls,
+          )
+        Ok([Some("[!TIP]")]) ->
+          do_parse_blocks(
+            AlertBuilder(ast.TipAlert, []),
+            [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
+            ls,
+          )
+        Ok([Some("[!IMPORTANT]")]) ->
+          do_parse_blocks(
+            AlertBuilder(ast.ImportantAlert, []),
+            [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
+            ls,
+          )
+        Ok([Some("[!WARNING]")]) ->
+          do_parse_blocks(
+            AlertBuilder(ast.WarningAlert, []),
+            [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
+            ls,
+          )
+        Ok([Some("[!CAUTION]")]) ->
+          do_parse_blocks(
+            AlertBuilder(ast.CautionAlert, []),
+            [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
+            ls,
+          )
         Ok([None]) | Ok([]) ->
           do_parse_blocks(
             BlockQuoteBuilder([""]),
@@ -821,6 +891,16 @@ fn do_parse_blocks(
       }
     OutsideBlock, [_, ..ls] if is_block_quote ->
       case block_quote_results {
+        Ok([Some("[!NOTE]")]) ->
+          do_parse_blocks(AlertBuilder(ast.NoteAlert, []), acc, ls)
+        Ok([Some("[!TIP]")]) ->
+          do_parse_blocks(AlertBuilder(ast.TipAlert, []), acc, ls)
+        Ok([Some("[!IMPORTANT]")]) ->
+          do_parse_blocks(AlertBuilder(ast.ImportantAlert, []), acc, ls)
+        Ok([Some("[!WARNING]")]) ->
+          do_parse_blocks(AlertBuilder(ast.WarningAlert, []), acc, ls)
+        Ok([Some("[!CAUTION]")]) ->
+          do_parse_blocks(AlertBuilder(ast.CautionAlert, []), acc, ls)
         Ok([None]) | Ok([]) -> do_parse_blocks(BlockQuoteBuilder([""]), acc, ls)
         Ok([Some(l)]) -> do_parse_blocks(BlockQuoteBuilder([l]), acc, ls)
         _ ->
