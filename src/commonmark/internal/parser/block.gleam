@@ -53,6 +53,49 @@ type BlockParseState {
   OrderedList(List(List(BlockParseState)), Int, Bool, ast.OrderedListMarker)
 }
 
+type ParserRegexes {
+  ParserRegexes(
+    atx_header: Regex,
+    block_quote: Regex,
+    fenced_code_start: Regex,
+    hr: Regex,
+    indented_code: Regex,
+    ol: Regex,
+    setext_header: Regex,
+    ul: Regex,
+  )
+}
+
+@external(erlang, "commonmark_ffi", "get_platform_regexes")
+@external(javascript, "../../../commonmark_ffi.mjs", "get_platform_regexes")
+fn get_platform_regexes() -> #(Regex, Regex)
+
+fn create_regexes() -> ParserRegexes {
+  let #(hr_regex, fenced_code_start_regex) = get_platform_regexes()
+  let assert Ok(atx_header_regex) =
+    regex.from_string("^ {0,3}(#{1,6})([ \t]+.*?)?(?:(?<=[ \t])#*)?[ \t]*$")
+  let assert Ok(setext_header_regex) =
+    regex.from_string("^ {0,3}([-=])+[ \t]*$")
+  let assert Ok(valid_indented_code_regex) =
+    regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
+  let assert Ok(block_quote_regex) = regex.from_string("^ {0,3}> ?(.*)$")
+  let assert Ok(ul_regex) =
+    regex.from_string("^( {0,3})([-*+])(?:( {1,4})(.*))?$")
+  let assert Ok(ol_regex) =
+    regex.from_string("^( {0,3})([0-9]{1,9})([.)])(?:( {1,4})(.*))?$")
+
+  ParserRegexes(
+    atx_header: atx_header_regex,
+    hr: hr_regex,
+    setext_header: setext_header_regex,
+    fenced_code_start: fenced_code_start_regex,
+    indented_code: valid_indented_code_regex,
+    block_quote: block_quote_regex,
+    ul: ul_regex,
+    ol: ol_regex,
+  )
+}
+
 fn merge_references(refs: List(ast.ReferenceList)) -> ast.ReferenceList {
   refs |> list.reduce(dict.merge) |> result.unwrap(dict.new())
 }
@@ -145,33 +188,27 @@ fn is_empty_line(l: String) -> Bool {
   { l |> trim_indent(4) } == ""
 }
 
-@external(erlang, "commonmark_ffi", "get_platform_regexes")
-@external(javascript, "../../../commonmark_ffi.mjs", "get_platform_regexes")
-fn get_platform_regexes() -> #(Regex, Regex)
-
 fn do_parse_blocks(
   state: BlockState,
   acc: List(BlockParseState),
   lines: List(String),
+  pr: ParserRegexes,
 ) -> List(BlockParseState) {
-  let #(hr_regex, fenced_code_start_regex) = get_platform_regexes()
-  let assert Ok(atx_header_regex) =
-    regex.from_string("^ {0,3}(#{1,6})([ \t]+.*?)?(?:(?<=[ \t])#*)?[ \t]*$")
-  let assert Ok(setext_header_regex) =
-    regex.from_string("^ {0,3}([-=])+[ \t]*$")
+  let ParserRegexes(
+    atx_header: atx_header_regex,
+    hr: hr_regex,
+    setext_header: setext_header_regex,
+    fenced_code_start: fenced_code_start_regex,
+    indented_code: valid_indented_code_regex,
+    block_quote: block_quote_regex,
+    ul: ul_regex,
+    ol: ol_regex,
+  ) = pr
   let assert Ok(fenced_code_regex) = case state {
     FencedCodeBlockBuilder(break, _, _, _, _) ->
       regex.from_string("^ {0,3}" <> break <> "+[ \t]*$")
     _ -> Ok(fenced_code_start_regex)
   }
-  let assert Ok(valid_indented_code_regex) =
-    regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
-  let assert Ok(block_quote_regex) = regex.from_string("^ {0,3}> ?(.*)$")
-  let assert Ok(ul_regex) =
-    regex.from_string("^( {0,3})([-*+])(?:( {1,4})(.*))?$")
-  let assert Ok(ol_regex) =
-    regex.from_string("^( {0,3})([0-9]{1,9})([.)])(?:( {1,4})(.*))?$")
-
   let l = list.first(lines)
   let atx_header_results =
     l |> result.try(apply_regex(_, with: atx_header_regex))
@@ -264,15 +301,15 @@ fn do_parse_blocks(
       ]
       |> list.reverse
     AlertBuilder(level, bs), [] ->
-      [Alert(level, bs |> list.reverse |> parse_blocks), ..acc]
+      [Alert(level, bs |> list.reverse |> parse_blocks(pr)), ..acc]
       |> list.reverse
     BlockQuoteBuilder(bs), [] ->
-      [BlockQuote(bs |> list.reverse |> parse_blocks), ..acc]
+      [BlockQuote(bs |> list.reverse |> parse_blocks(pr)), ..acc]
       |> list.reverse
     UnorderedListBuilder(item, items, tight, marker, _), [] ->
       [
         UnorderedList(
-          [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+          [item |> list.reverse |> parse_blocks(pr), ..items] |> list.reverse,
           tight && !list.any(list.drop(item, 1), is_empty_line),
           ul_marker(marker),
         ),
@@ -282,7 +319,7 @@ fn do_parse_blocks(
     OrderedListBuilder(item, items, tight, marker, start, _), [] ->
       [
         OrderedList(
-          [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+          [item |> list.reverse |> parse_blocks(pr), ..items] |> list.reverse,
           start,
           tight && !list.any(list.drop(item, 1), is_empty_line),
           ol_marker(marker),
@@ -302,11 +339,12 @@ fn do_parse_blocks(
         OutsideBlock,
         [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
         ls,
+        pr,
       )
     OutsideBlock, ["  ", ..ls]
     | OutsideBlock, ["\\", ..ls]
     | OutsideBlock, ["", ..ls]
-    -> do_parse_blocks(OutsideBlock, acc, ls)
+    -> do_parse_blocks(OutsideBlock, acc, ls, pr)
     // Setext headers
     ParagraphBuilder(bs), [_, ..ls] if is_setext_header ->
       case setext_header_results {
@@ -315,12 +353,14 @@ fn do_parse_blocks(
             OutsideBlock,
             [Heading(1, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
             ls,
+            pr,
           )
         Ok([Some("-")]) ->
           do_parse_blocks(
             OutsideBlock,
             [Heading(2, Some(list.reverse(bs) |> string.join("\n"))), ..acc],
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -335,13 +375,14 @@ fn do_parse_blocks(
         [
           HorizontalBreak,
           UnorderedList(
-            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+            [item |> list.reverse |> parse_blocks(pr), ..items] |> list.reverse,
             tight && !list.any(list.drop(item, 1), is_empty_line),
             ul_marker(marker),
           ),
           ..acc
         ],
         ls,
+        pr,
       )
     OrderedListBuilder(item, items, tight, marker, start, _), [_, ..ls]
       if is_hr
@@ -351,7 +392,7 @@ fn do_parse_blocks(
         [
           HorizontalBreak,
           OrderedList(
-            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+            [item |> list.reverse |> parse_blocks(pr), ..items] |> list.reverse,
             start,
             tight && !list.any(list.drop(item, 1), is_empty_line),
             ol_marker(marker),
@@ -359,6 +400,7 @@ fn do_parse_blocks(
           ..acc
         ],
         ls,
+        pr,
       )
     ParagraphBuilder(bs), [_, ..ls] if is_hr ->
       do_parse_blocks(
@@ -369,9 +411,10 @@ fn do_parse_blocks(
           ..acc
         ],
         ls,
+        pr,
       )
     OutsideBlock, [_, ..ls] if is_hr ->
-      do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls)
+      do_parse_blocks(OutsideBlock, [HorizontalBreak, ..acc], ls, pr)
     // Unordered lists
     UnorderedListBuilder(item, items, tight, marker, indent), [l, ..ls]
       if is_list_continuation
@@ -386,6 +429,7 @@ fn do_parse_blocks(
         ),
         acc,
         ls,
+        pr,
       )
     UnorderedListBuilder(item, items, tight, marker, _), [_, ..ls] if is_ul ->
       case ul_results {
@@ -393,13 +437,14 @@ fn do_parse_blocks(
           do_parse_blocks(
             UnorderedListBuilder(
               [],
-              [item |> list.reverse |> parse_blocks, ..items],
+              [item |> list.reverse |> parse_blocks(pr), ..items],
               tight && !list.any(item, is_empty_line),
               marker,
               { option.unwrap(leading, "") |> string.length } + 1,
             ),
             acc,
             ls,
+            pr,
           )
         Ok([leading, Some(new_marker), Some(new_indent), rest])
           if marker == new_marker
@@ -407,7 +452,7 @@ fn do_parse_blocks(
           do_parse_blocks(
             UnorderedListBuilder(
               [rest |> option.unwrap("")],
-              [item |> list.reverse |> parse_blocks, ..items],
+              [item |> list.reverse |> parse_blocks(pr), ..items],
               tight && !list.any(item, is_empty_line),
               marker,
               string.length(new_indent)
@@ -416,6 +461,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         Ok([leading, Some(new_marker)]) ->
           do_parse_blocks(
@@ -428,13 +474,15 @@ fn do_parse_blocks(
             ),
             [
               UnorderedList(
-                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+                [item |> list.reverse |> parse_blocks(pr), ..items]
+                  |> list.reverse,
                 tight && !list.any(list.drop(item, 1), is_empty_line),
                 ul_marker(marker),
               ),
               ..acc
             ],
             ls,
+            pr,
           )
         Ok([leading, Some(new_marker), Some(new_indent), rest]) ->
           do_parse_blocks(
@@ -449,13 +497,15 @@ fn do_parse_blocks(
             ),
             [
               UnorderedList(
-                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+                [item |> list.reverse |> parse_blocks(pr), ..items]
+                  |> list.reverse,
                 tight && !list.any(list.drop(item, 1), is_empty_line),
                 ul_marker(marker),
               ),
               ..acc
             ],
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -468,13 +518,14 @@ fn do_parse_blocks(
         OutsideBlock,
         [
           UnorderedList(
-            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+            [item |> list.reverse |> parse_blocks(pr), ..items] |> list.reverse,
             tight && !list.any(list.drop(item, 1), is_empty_line),
             ul_marker(marker),
           ),
           ..acc
         ],
         ls,
+        pr,
       )
     OutsideBlock, [_, ..ls] if is_ul ->
       case ul_results {
@@ -489,6 +540,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         Ok([leading, Some(marker), Some(indent), rest]) ->
           do_parse_blocks(
@@ -503,6 +555,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -525,6 +578,7 @@ fn do_parse_blocks(
         ),
         acc,
         ls,
+        pr,
       )
     OrderedListBuilder(item, items, tight, marker, start, _), [_, ..ls]
       if is_ol
@@ -534,7 +588,7 @@ fn do_parse_blocks(
           do_parse_blocks(
             OrderedListBuilder(
               [],
-              [item |> list.reverse |> parse_blocks, ..items],
+              [item |> list.reverse |> parse_blocks(pr), ..items],
               tight && !list.any(item, is_empty_line),
               marker,
               start,
@@ -542,6 +596,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         Ok([leading, Some(new_start), Some(new_marker), Some(new_indent), rest])
           if marker == new_marker
@@ -549,7 +604,7 @@ fn do_parse_blocks(
           do_parse_blocks(
             OrderedListBuilder(
               [rest |> option.unwrap("")],
-              [item |> list.reverse |> parse_blocks, ..items],
+              [item |> list.reverse |> parse_blocks(pr), ..items],
               tight && !list.any(item, is_empty_line),
               marker,
               start,
@@ -560,6 +615,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         Ok([leading, Some(new_start), Some(new_marker)]) ->
           do_parse_blocks(
@@ -575,7 +631,8 @@ fn do_parse_blocks(
             ),
             [
               OrderedList(
-                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+                [item |> list.reverse |> parse_blocks(pr), ..items]
+                  |> list.reverse,
                 start,
                 tight && !list.any(list.drop(item, 1), is_empty_line),
                 ol_marker(marker),
@@ -583,6 +640,7 @@ fn do_parse_blocks(
               ..acc
             ],
             ls,
+            pr,
           )
         Ok([leading, Some(new_start), Some(new_marker), Some(new_indent), rest]) ->
           do_parse_blocks(
@@ -599,7 +657,8 @@ fn do_parse_blocks(
             ),
             [
               OrderedList(
-                [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+                [item |> list.reverse |> parse_blocks(pr), ..items]
+                  |> list.reverse,
                 start,
                 tight && !list.any(list.drop(item, 1), is_empty_line),
                 ol_marker(marker),
@@ -607,6 +666,7 @@ fn do_parse_blocks(
               ..acc
             ],
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -618,7 +678,7 @@ fn do_parse_blocks(
         OutsideBlock,
         [
           OrderedList(
-            [item |> list.reverse |> parse_blocks, ..items] |> list.reverse,
+            [item |> list.reverse |> parse_blocks(pr), ..items] |> list.reverse,
             start,
             tight && !list.any(list.drop(item, 1), is_empty_line),
             ol_marker(marker),
@@ -626,6 +686,7 @@ fn do_parse_blocks(
           ..acc
         ],
         ls,
+        pr,
       )
     OutsideBlock, [_, ..ls] if is_ol ->
       case ol_results {
@@ -643,6 +704,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         Ok([leading, Some(start), Some(marker), Some(indent), rest]) ->
           do_parse_blocks(
@@ -659,6 +721,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -668,13 +731,13 @@ fn do_parse_blocks(
     // Indented code blocks
     OutsideBlock, [l, ..ls] if is_indented_code_block ->
       case is_blank_line {
-        True -> do_parse_blocks(OutsideBlock, acc, ls)
-        False -> do_parse_blocks(IndentedCodeBlockBuilder([l]), acc, ls)
+        True -> do_parse_blocks(OutsideBlock, acc, ls, pr)
+        False -> do_parse_blocks(IndentedCodeBlockBuilder([l]), acc, ls, pr)
       }
     IndentedCodeBlockBuilder(bs), [l] if is_indented_code_block ->
-      do_parse_blocks(IndentedCodeBlockBuilder([l, ..bs]), acc, [])
+      do_parse_blocks(IndentedCodeBlockBuilder([l, ..bs]), acc, [], pr)
     IndentedCodeBlockBuilder(bs), [l, ..ls] if is_indented_code_block ->
-      do_parse_blocks(IndentedCodeBlockBuilder([l, ..bs]), acc, ls)
+      do_parse_blocks(IndentedCodeBlockBuilder([l, ..bs]), acc, ls, pr)
     IndentedCodeBlockBuilder(bs), ls ->
       do_parse_blocks(
         OutsideBlock,
@@ -695,6 +758,7 @@ fn do_parse_blocks(
           ..acc
         ],
         ls,
+        pr,
       )
     // Fenced code blocks
     ParagraphBuilder(bs), [_, ..ls] if is_fenced_code_block ->
@@ -710,6 +774,7 @@ fn do_parse_blocks(
             ),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         Ok([indent, Some(exit), _, full_info, info]) ->
           do_parse_blocks(
@@ -722,6 +787,7 @@ fn do_parse_blocks(
             ),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -742,6 +808,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         Ok([indent, Some(exit), _, full_info, info]) ->
           do_parse_blocks(
@@ -754,6 +821,7 @@ fn do_parse_blocks(
             ),
             acc,
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -776,20 +844,22 @@ fn do_parse_blocks(
           ..acc
         ],
         ls,
+        pr,
       )
     FencedCodeBlockBuilder(break, info, full_info, bs, indent), [l, ..ls] ->
       do_parse_blocks(
         FencedCodeBlockBuilder(break, info, full_info, [l, ..bs], indent),
         acc,
         ls,
+        pr,
       )
     // Block quotes and alerts
     AlertBuilder(level, bs), [_, ..ls] if is_block_quote ->
       case block_quote_results {
         Ok([None]) | Ok([]) ->
-          do_parse_blocks(AlertBuilder(level, ["", ..bs]), acc, ls)
+          do_parse_blocks(AlertBuilder(level, ["", ..bs]), acc, ls, pr)
         Ok([Some(l)]) ->
-          do_parse_blocks(AlertBuilder(level, [l, ..bs]), acc, ls)
+          do_parse_blocks(AlertBuilder(level, [l, ..bs]), acc, ls, pr)
         _ ->
           panic as {
             "Invalid block quote parser state: "
@@ -800,23 +870,25 @@ fn do_parse_blocks(
       case
         bs
         |> list.reverse
-        |> parse_blocks
+        |> parse_blocks(pr)
         |> list.last
       {
         Ok(Paragraph(_)) | Ok(BlockQuote(_)) if is_paragraph && !is_blank_line ->
-          do_parse_blocks(AlertBuilder(level, [l, ..bs]), acc, ls)
+          do_parse_blocks(AlertBuilder(level, [l, ..bs]), acc, ls, pr)
         _ ->
           do_parse_blocks(
             OutsideBlock,
-            [Alert(level, bs |> list.reverse |> parse_blocks), ..acc],
+            [Alert(level, bs |> list.reverse |> parse_blocks(pr)), ..acc],
             [l, ..ls],
+            pr,
           )
       }
     BlockQuoteBuilder(bs), [_, ..ls] if is_block_quote ->
       case block_quote_results {
         Ok([None]) | Ok([]) ->
-          do_parse_blocks(BlockQuoteBuilder(["", ..bs]), acc, ls)
-        Ok([Some(l)]) -> do_parse_blocks(BlockQuoteBuilder([l, ..bs]), acc, ls)
+          do_parse_blocks(BlockQuoteBuilder(["", ..bs]), acc, ls, pr)
+        Ok([Some(l)]) ->
+          do_parse_blocks(BlockQuoteBuilder([l, ..bs]), acc, ls, pr)
         _ ->
           panic as {
             "Invalid block quote parser state: "
@@ -827,16 +899,17 @@ fn do_parse_blocks(
       case
         bs
         |> list.reverse
-        |> parse_blocks
+        |> parse_blocks(pr)
         |> list.last
       {
         Ok(Paragraph(_)) | Ok(BlockQuote(_)) if is_paragraph && !is_blank_line ->
-          do_parse_blocks(BlockQuoteBuilder([l, ..bs]), acc, ls)
+          do_parse_blocks(BlockQuoteBuilder([l, ..bs]), acc, ls, pr)
         _ ->
           do_parse_blocks(
             OutsideBlock,
-            [BlockQuote(bs |> list.reverse |> parse_blocks), ..acc],
+            [BlockQuote(bs |> list.reverse |> parse_blocks(pr)), ..acc],
             [l, ..ls],
+            pr,
           )
       }
     ParagraphBuilder(bs), [_, ..ls] if is_block_quote ->
@@ -846,42 +919,49 @@ fn do_parse_blocks(
             AlertBuilder(ast.NoteAlert, []),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         Ok([Some("[!TIP]")]) ->
           do_parse_blocks(
             AlertBuilder(ast.TipAlert, []),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         Ok([Some("[!IMPORTANT]")]) ->
           do_parse_blocks(
             AlertBuilder(ast.ImportantAlert, []),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         Ok([Some("[!WARNING]")]) ->
           do_parse_blocks(
             AlertBuilder(ast.WarningAlert, []),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         Ok([Some("[!CAUTION]")]) ->
           do_parse_blocks(
             AlertBuilder(ast.CautionAlert, []),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         Ok([None]) | Ok([]) ->
           do_parse_blocks(
             BlockQuoteBuilder([""]),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         Ok([Some(l)]) ->
           do_parse_blocks(
             BlockQuoteBuilder([l]),
             [Paragraph(list.reverse(bs) |> string.join("\n")), ..acc],
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -892,17 +972,18 @@ fn do_parse_blocks(
     OutsideBlock, [_, ..ls] if is_block_quote ->
       case block_quote_results {
         Ok([Some("[!NOTE]")]) ->
-          do_parse_blocks(AlertBuilder(ast.NoteAlert, []), acc, ls)
+          do_parse_blocks(AlertBuilder(ast.NoteAlert, []), acc, ls, pr)
         Ok([Some("[!TIP]")]) ->
-          do_parse_blocks(AlertBuilder(ast.TipAlert, []), acc, ls)
+          do_parse_blocks(AlertBuilder(ast.TipAlert, []), acc, ls, pr)
         Ok([Some("[!IMPORTANT]")]) ->
-          do_parse_blocks(AlertBuilder(ast.ImportantAlert, []), acc, ls)
+          do_parse_blocks(AlertBuilder(ast.ImportantAlert, []), acc, ls, pr)
         Ok([Some("[!WARNING]")]) ->
-          do_parse_blocks(AlertBuilder(ast.WarningAlert, []), acc, ls)
+          do_parse_blocks(AlertBuilder(ast.WarningAlert, []), acc, ls, pr)
         Ok([Some("[!CAUTION]")]) ->
-          do_parse_blocks(AlertBuilder(ast.CautionAlert, []), acc, ls)
-        Ok([None]) | Ok([]) -> do_parse_blocks(BlockQuoteBuilder([""]), acc, ls)
-        Ok([Some(l)]) -> do_parse_blocks(BlockQuoteBuilder([l]), acc, ls)
+          do_parse_blocks(AlertBuilder(ast.CautionAlert, []), acc, ls, pr)
+        Ok([None]) | Ok([]) ->
+          do_parse_blocks(BlockQuoteBuilder([""]), acc, ls, pr)
+        Ok([Some(l)]) -> do_parse_blocks(BlockQuoteBuilder([l]), acc, ls, pr)
         _ ->
           panic as {
             "Invalid block quote parser state: "
@@ -917,12 +998,14 @@ fn do_parse_blocks(
             OutsideBlock,
             [Heading(string.length(heading), None), ..acc],
             ls,
+            pr,
           )
         Ok([Some(heading), Some(contents)]) ->
           do_parse_blocks(
             OutsideBlock,
             [Heading(string.length(heading), Some(contents)), ..acc],
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -941,6 +1024,7 @@ fn do_parse_blocks(
               ..acc
             ],
             ls,
+            pr,
           )
         Ok([Some(heading), Some(contents)]) ->
           do_parse_blocks(
@@ -951,6 +1035,7 @@ fn do_parse_blocks(
               ..acc
             ],
             ls,
+            pr,
           )
         _ ->
           panic as {
@@ -960,19 +1045,21 @@ fn do_parse_blocks(
       }
     // Paragraphs
     OutsideBlock, [line, ..ls] ->
-      do_parse_blocks(ParagraphBuilder([line]), acc, ls)
+      do_parse_blocks(ParagraphBuilder([line]), acc, ls, pr)
     ParagraphBuilder(bs), [line, ..ls] ->
-      do_parse_blocks(ParagraphBuilder([line, ..bs]), acc, ls)
+      do_parse_blocks(ParagraphBuilder([line, ..bs]), acc, ls, pr)
   }
 }
 
-fn parse_blocks(lines: List(String)) -> List(BlockParseState) {
-  do_parse_blocks(OutsideBlock, [], lines)
+fn parse_blocks(lines: List(String), pr: ParserRegexes) -> List(BlockParseState) {
+  do_parse_blocks(OutsideBlock, [], lines, pr)
 }
 
 pub fn parse_document(lines: List(String)) -> ast.Document {
+  let parser_regexes = create_regexes()
+
   let #(blocks, refs) =
-    parse_blocks(lines)
+    parse_blocks(lines, parser_regexes)
     |> list.map(parse_block_state)
     |> list.unzip
     |> pair.map_second(merge_references)
