@@ -28,6 +28,9 @@ fn main () {
 
 ## Examples
 
+> [!NOTE]
+> These examples are pretty contrived, really.
+
 * List item 1
 * List item 2
 
