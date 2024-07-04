@@ -8,7 +8,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
-import gleam/regex.{Match}
+import gleam/regex.{type Regex, Match}
 import gleam/result
 import gleam/string
 
@@ -136,24 +136,16 @@ fn is_empty_line(l: String) -> Bool {
   { l |> trim_indent(4) } == ""
 }
 
-@target(erlang)
-const hr_regex_string = "^ {0,3}(?:([-*_]))(?:[ \t]*\\g{1}){2,}[ \t]*$"
-
-@target(javascript)
-const hr_regex_string = "^ {0,3}(?:([-*_]))(?:[ \t]*\\1){2,}[ \t]*$"
-
-@target(erlang)
-const fenced_code_start_regex_string = "^( {0,3})(([~`])\\g{3}{2,})[ \t]*(([^\\s]+).*?)?[ \t]*$"
-
-@target(javascript)
-const fenced_code_start_regex_string = "^( {0,3})(([~`])\\3{2,})[ \t]*(([^\\s]+).*?)?[ \t]*$"
+@external(erlang, "commonmark_ffi", "get_platform_regexes")
+@external(javascript, "../../../commonmark_ffi.mjs", "get_platform_regexes")
+fn get_platform_regexes() -> #(Regex, Regex)
 
 fn do_parse_blocks(
   state: BlockState,
   acc: List(BlockParseState),
   lines: List(String),
 ) -> List(BlockParseState) {
-  let assert Ok(hr_regex) = regex.from_string(hr_regex_string)
+  let #(hr_regex, fenced_code_start_regex) = get_platform_regexes()
   let assert Ok(atx_header_regex) =
     regex.from_string("^ {0,3}(#{1,6})([ \t]+.*?)?(?:(?<=[ \t])#*)?[ \t]*$")
   let assert Ok(setext_header_regex) =
@@ -161,7 +153,7 @@ fn do_parse_blocks(
   let assert Ok(fenced_code_regex) = case state {
     FencedCodeBlockBuilder(break, _, _, _, _) ->
       regex.from_string("^ {0,3}" <> break <> "+[ \t]*$")
-    _ -> regex.from_string(fenced_code_start_regex_string)
+    _ -> Ok(fenced_code_start_regex)
   }
   let assert Ok(valid_indented_code_regex) =
     regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
