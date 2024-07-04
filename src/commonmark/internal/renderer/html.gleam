@@ -272,6 +272,14 @@ fn blockquote(contents: List(String)) -> String {
   "<blockquote>\n" <> string.join(contents, "") <> "</blockquote>\n"
 }
 
+fn alert(level: String, contents: List(String)) -> String {
+  "<blockquote class=\"alert alert-"
+  <> level
+  <> "\">\n"
+  <> string.join(contents, "")
+  <> "</blockquote>\n"
+}
+
 fn code(contents: String, language: Option(String)) -> String {
   let class =
     language
@@ -304,13 +312,28 @@ fn ul(content: List(String)) -> String {
   "<ul>\n" <> string.join(content, "") <> "</ul>\n"
 }
 
+fn alert_level_string(level: ast.AlertLevel) {
+  case level {
+    ast.CautionAlert -> "caution"
+    ast.ImportantAlert -> "important"
+    ast.NoteAlert -> "note"
+    ast.TipAlert -> "tip"
+    ast.WarningAlert -> "warning"
+  }
+}
+
 pub fn block_to_html(
   block: ast.BlockNode,
   refs: Dict(String, ast.Reference),
   tight: Bool,
 ) -> Result(String, ast.RenderError) {
   case block {
-    ast.AlertBlock(_, contents) | ast.BlockQuote(contents) ->
+    ast.AlertBlock(level, contents) ->
+      contents
+      |> list.map(block_to_html(_, refs, False))
+      |> result.all
+      |> result.map(alert(alert_level_string(level), _))
+    ast.BlockQuote(contents) ->
       contents
       |> list.map(block_to_html(_, refs, False))
       |> result.all
