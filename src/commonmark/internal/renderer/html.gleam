@@ -381,7 +381,12 @@ pub fn block_to_html_safe(
   tight: Bool,
 ) -> String {
   case block {
-    ast.AlertBlock(_, contents) | ast.BlockQuote(contents) ->
+    ast.AlertBlock(level, contents) ->
+      alert(
+        alert_level_string(level),
+        contents |> list.map(block_to_html_safe(_, refs, False)),
+      )
+    ast.BlockQuote(contents) ->
       blockquote(contents |> list.map(block_to_html_safe(_, refs, False)))
     ast.CodeBlock(language, _, contents) ->
       code(contents |> sanitize_plain_text, language)

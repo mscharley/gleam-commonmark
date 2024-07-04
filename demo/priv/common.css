@@ -1,0 +1,31 @@
+:is(.use-lustre-ui .prose, .lustre-ui-prose) blockquote.alert {
+	padding-top: 1em;
+	padding-bottom: 1em;
+	border-left-color: var(--alert-color);
+	background-color: color-mix(in srgb, var(--alert-color) 15%, white);
+	quotes: none;
+}
+
+:is(.use-lustre-ui .prose, .lustre-ui-prose) blockquote.alert-note {
+	--alert-color: rgb(64, 158, 255)
+}
+
+:is(.use-lustre-ui .prose, .lustre-ui-prose) blockquote.alert-tip {
+	--alert-color: rgb(40, 215, 81);
+}
+
+:is(.use-lustre-ui .prose, .lustre-ui-prose) blockquote.alert-important {
+	--alert-color: rgb(191, 143, 255);
+}
+
+:is(.use-lustre-ui .prose, .lustre-ui-prose) blockquote.alert-warning {
+	--alert-color: rgb(240, 183, 47);
+}
+
+:is(.use-lustre-ui .prose, .lustre-ui-prose) blockquote.alert-caution {
+	--alert-color: rgb(255, 128, 128);
+}
+
+:is(.use-lustre-ui .prose, .lustre-ui-prose) blockquote > * {
+	font-style: normal;
+}
