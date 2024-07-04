@@ -291,10 +291,17 @@ This is a test."
     CodeBlock(
       Some("sh"),
       Some("sh"),
-      "gleam test                    # Run the tests
-gleam run -m tools/benchmark  # Run the benchmarks
-gleam run -m tools/codegen    # Run the codegen tasks (these are committed in the repo)
-gleam shell                   # Run an Erlang shell
+      "gleam test              # Run the tests
+gleam shell             # Run an Erlang shell
+",
+    ),
+    Heading(3, [PlainText("Tools")]),
+    CodeBlock(
+      Some("sh"),
+      Some("sh"),
+      "cd tools/
+gleam run -m benchmark  # Run the benchmarks
+gleam run -m codegen    # Run the codegen tasks (these are committed in the repo)
 ",
     ),
   ],

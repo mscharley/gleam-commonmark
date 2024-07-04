@@ -1,20 +1,15 @@
-@target(erlang)
 import commonmark
-@target(erlang)
 import glychee/benchmark
-@target(erlang)
 import glychee/configuration
-@target(erlang)
 import simplifile
 
-@target(erlang)
 pub fn main() {
   // Configuration is optional
   configuration.initialize()
   configuration.set_pair(configuration.Warmup, 2)
   configuration.set_pair(configuration.Parallel, 2)
 
-  let assert Ok(readme) = simplifile.read("./README.md")
+  let assert Ok(readme) = simplifile.read("../README.md")
 
   // Run the benchmarks
   benchmark.run(
