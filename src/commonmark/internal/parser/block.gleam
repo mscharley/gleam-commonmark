@@ -210,16 +210,28 @@ fn do_parse_blocks(
     _ -> Ok(fenced_code_start_regex)
   }
   let l = list.first(lines)
+
   let atx_header_results =
     l |> result.try(apply_regex(_, with: atx_header_regex))
-  let setext_header_results =
-    l |> result.try(apply_regex(_, with: setext_header_regex))
-  let fenced_code_results =
-    l |> result.try(apply_regex(_, with: fenced_code_regex))
+  let is_atx_header = result.is_ok(atx_header_results)
+
   let block_quote_results =
     l |> result.try(apply_regex(_, with: block_quote_regex))
-  let ul_results = l |> result.try(apply_regex(_, with: ul_regex))
+  let is_block_quote = result.is_ok(block_quote_results)
+
+  let fenced_code_results =
+    l |> result.try(apply_regex(_, with: fenced_code_regex))
+  let is_fenced_code_block = result.is_ok(fenced_code_results)
+
   let ol_results = l |> result.try(apply_regex(_, with: ol_regex))
+  let is_ol = result.is_ok(ol_results)
+
+  let setext_header_results =
+    l |> result.try(apply_regex(_, with: setext_header_regex))
+  let is_setext_header = result.is_ok(setext_header_results)
+
+  let ul_results = l |> result.try(apply_regex(_, with: ul_regex))
+  let is_ul = result.is_ok(ul_results)
 
   let is_hr =
     l |> result.map(regex.check(_, with: hr_regex)) |> result.unwrap(False)
@@ -227,20 +239,6 @@ fn do_parse_blocks(
     l
     |> result.map(regex.check(_, with: valid_indented_code_regex))
     |> result.unwrap(False)
-  let is_atx_header =
-    atx_header_results
-    |> result.is_ok
-  let is_setext_header =
-    setext_header_results
-    |> result.is_ok
-  let is_fenced_code_block =
-    fenced_code_results
-    |> result.is_ok
-  let is_block_quote =
-    block_quote_results
-    |> result.is_ok
-  let is_ul = ul_results |> result.is_ok
-  let is_ol = ol_results |> result.is_ok
   let is_list_continuation = case state {
     UnorderedListBuilder(_, _, _, _, indent)
     | OrderedListBuilder(_, _, _, _, _, indent) -> {

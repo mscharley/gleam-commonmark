@@ -9,7 +9,7 @@
 gleam add commonmark
 ```
 ```gleam
-import commonmark
+import commonmark/html as commonmark
 import gleam/io
 
 pub fn main() {
@@ -85,6 +85,18 @@ The current version of GFM targetted is [0.29-gfm][gfm].
 * ✅ [Github alerts][github-alert]
 
 [github-alert]: https://github.com/orgs/community/discussions/16925
+
+## Project structure
+
+The `commonmark` package is just the parser as well as a simple HTML renderer which
+returns a string, mostly to facilitate checking CommonMark spec compliance. Most
+likely you want a specialised render for whatever framework you're using though.
+
+Known renderer projects:
+
+* `commonmark/commonmark` is a CommonMark renderer, useful if you want to generate
+  an AST and write out a document based on it.
+* `commonmark/html` is a HTML renderer included as part of this package.
 
 ## Development
 

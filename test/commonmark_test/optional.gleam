@@ -1,4 +1,4 @@
-import commonmark
+import commonmark/html as commonmark
 import startest/expect
 
 /// Between example 102 and 103, there is a compatibility note about how setext headers can

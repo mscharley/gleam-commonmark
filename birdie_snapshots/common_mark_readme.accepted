@@ -56,7 +56,7 @@ Document(
     CodeBlock(
       Some("gleam"),
       Some("gleam"),
-      "import commonmark
+      "import commonmark/html as commonmark
 import gleam/io
 
 pub fn main() {
@@ -285,6 +285,41 @@ This is a test."
     Paragraph([
       PlainText("[github-alert]: https://github.com/orgs/community/discussions/16925"),
     ]),
+    Heading(
+      2,
+      [PlainText("Project structure")],
+    ),
+    Paragraph([
+      PlainText("The "),
+      CodeSpan("commonmark"),
+      PlainText(" package is just the parser as well as a simple HTML renderer which"),
+      SoftLineBreak,
+      PlainText("returns a string, mostly to facilitate checking CommonMark spec compliance. Most"),
+      SoftLineBreak,
+      PlainText("likely you want a specialised render for whatever framework you're using though."),
+    ]),
+    Paragraph([
+      PlainText("Known renderer projects:"),
+    ]),
+    UnorderedList(
+      [
+        TightListItem([
+          Paragraph([
+            CodeSpan("commonmark/commonmark"),
+            PlainText(" is a CommonMark renderer, useful if you want to generate"),
+            SoftLineBreak,
+            PlainText("an AST and write out a document based on it."),
+          ]),
+        ]),
+        TightListItem([
+          Paragraph([
+            CodeSpan("commonmark/html"),
+            PlainText(" is a HTML renderer included as part of this package."),
+          ]),
+        ]),
+      ],
+      AsteriskListMarker,
+    ),
     Heading(
       2,
       [PlainText("Development")],

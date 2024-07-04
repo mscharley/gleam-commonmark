@@ -1,4 +1,4 @@
-import commonmark
+import commonmark/html as commonmark
 import gleam/dict
 import gleam/dynamic.{field, int as int_field, list, string}
 import gleam/int
