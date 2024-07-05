@@ -482,10 +482,33 @@ fn do_parse_blocks(
             ls,
             pr,
           )
+        Ok([leading, Some(new_marker), Some(new_indent)]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [],
+              [],
+              True,
+              new_marker,
+              string.length(new_indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            [
+              UnorderedList(
+                [item |> list.reverse |> parse_blocks(pr), ..items]
+                  |> list.reverse,
+                tight && !list.any(list.drop(item, 1), is_empty_line),
+                ul_marker(marker),
+              ),
+              ..acc
+            ],
+            ls,
+            pr,
+          )
         Ok([leading, Some(new_marker), Some(new_indent), rest]) ->
           do_parse_blocks(
             UnorderedListBuilder(
-              [rest |> option.unwrap("")],
+              rest |> option.map(list.wrap) |> option.unwrap([]),
               [],
               True,
               new_marker,
@@ -540,10 +563,25 @@ fn do_parse_blocks(
             ls,
             pr,
           )
+        Ok([leading, Some(marker), Some(indent)]) ->
+          do_parse_blocks(
+            UnorderedListBuilder(
+              [],
+              [],
+              True,
+              marker,
+              string.length(indent)
+                + { option.unwrap(leading, "") |> string.length }
+                + 1,
+            ),
+            acc,
+            ls,
+            pr,
+          )
         Ok([leading, Some(marker), Some(indent), rest]) ->
           do_parse_blocks(
             UnorderedListBuilder(
-              [rest |> option.unwrap("")],
+              rest |> option.map(list.wrap) |> option.unwrap([]),
               [],
               True,
               marker,
