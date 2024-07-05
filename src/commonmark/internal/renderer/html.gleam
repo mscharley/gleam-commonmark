@@ -1,6 +1,5 @@
 import commonmark/ast
 import gleam/dict.{type Dict}
-import gleam/function.{identity}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -161,19 +160,23 @@ fn loose_list_item(content: List(String)) -> String {
   "<li>\n" <> string.join(content, "") <> "</li>\n"
 }
 
+fn map_pair(
+  x: #(Result(String, ast.RenderError), Result(String, ast.RenderError)),
+  f: fn(#(String, String)) -> String,
+) -> Result(String, ast.RenderError) {
+  use first <- result.try(x.0)
+  use last <- result.try(x.1)
+  Ok(f(#(first, last)))
+}
+
 fn tight_list_item(
   contents: List(ast.BlockNode),
   refs: ast.ReferenceList,
-  f: fn(ast.BlockNode, ast.ReferenceList, Bool) -> a,
-  all: fn(List(a)) -> b,
-  try: fn(b, fn(List(String)) -> a) -> a,
-  map: fn(a, fn(String) -> String) -> a,
-  map_pair: fn(#(a, a), fn(#(String, String)) -> String) -> a,
-  unit: fn(String) -> a,
-) -> a {
+) -> Result(String, ast.RenderError) {
   let count = list.length(contents)
+
   let r = contents |> list.reverse
-  use rest <- try(
+  use rest <- result.try(
     r
     |> list.drop(1)
     |> list.reverse
@@ -181,32 +184,75 @@ fn tight_list_item(
     |> list.map(fn(b) {
       case b {
         ast.Paragraph(c) ->
-          f(ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])), refs, True)
-        _ -> f(b, refs, True)
+          block_to_html(
+            ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])),
+            refs,
+            True,
+          )
+        _ -> block_to_html(b, refs, True)
       }
     })
-    |> all,
+    |> result.all,
   )
   use #(first, last) <- map_pair(case
     count,
     list.first(contents),
     list.first(r)
   {
-    0, _, _ | _, Error(_), _ | _, _, Error(_) -> #(unit(""), unit(""))
-    1, Ok(ast.Paragraph(_) as p), _ -> #(f(p, refs, True), unit(""))
+    0, _, _ | _, Error(_), _ | _, _, Error(_) -> #(Ok(""), Ok(""))
+    1, Ok(ast.Paragraph(_) as p), _ -> #(block_to_html(p, refs, True), Ok(""))
     1, Ok(block), _ -> #(
-      f(block, refs, True) |> map(fn(x) { "\n" <> x }),
-      unit(""),
+      block_to_html(block, refs, True) |> result.map(fn(x) { "\n" <> x }),
+      Ok(""),
     )
     _, Ok(ast.Paragraph(_) as p), Ok(last) -> #(
-      f(p, refs, True) |> map(fn(x) { x <> "\n" }),
-      f(last, refs, True),
+      block_to_html(p, refs, True) |> result.map(fn(x) { x <> "\n" }),
+      block_to_html(last, refs, True),
     )
     _, Ok(first), Ok(last) -> #(
-      f(first, refs, True) |> map(fn(x) { "\n" <> x }),
-      f(last, refs, True),
+      block_to_html(first, refs, True) |> result.map(fn(x) { "\n" <> x }),
+      block_to_html(last, refs, True),
     )
   })
+
+  "<li>" <> first <> string.join(rest, "") <> last <> "</li>\n"
+}
+
+fn tight_list_item_safe(
+  contents: List(ast.BlockNode),
+  refs: ast.ReferenceList,
+) -> String {
+  let count = list.length(contents)
+  let r = contents |> list.reverse
+  let rest =
+    r
+    |> list.drop(1)
+    |> list.reverse
+    |> list.drop(1)
+    |> list.map(fn(b) {
+      case b {
+        ast.Paragraph(c) ->
+          block_to_html_safe(
+            ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])),
+            refs,
+            True,
+          )
+        _ -> block_to_html_safe(b, refs, True)
+      }
+    })
+  let #(first, last) = case count, list.first(contents), list.first(r) {
+    0, _, _ | _, Error(_), _ | _, _, Error(_) -> #("", "")
+    1, Ok(ast.Paragraph(_) as p), _ -> #(block_to_html_safe(p, refs, True), "")
+    1, Ok(block), _ -> #("\n" <> block_to_html_safe(block, refs, True), "")
+    _, Ok(ast.Paragraph(_) as p), Ok(last) -> #(
+      block_to_html_safe(p, refs, True) <> "\n",
+      block_to_html_safe(last, refs, True),
+    )
+    _, Ok(first), Ok(last) -> #(
+      "\n" <> block_to_html_safe(first, refs, True),
+      block_to_html_safe(last, refs, True),
+    )
+  }
 
   "<li>" <> first <> string.join(rest, "") <> last <> "</li>\n"
 }
@@ -223,23 +269,7 @@ fn list_item_to_html(
       |> result.all
       |> result.map(loose_list_item)
     ast.TightListItem(contents) -> {
-      tight_list_item(
-        contents,
-        refs,
-        block_to_html,
-        result.all,
-        result.try,
-        result.map,
-        fn(
-          x: #(Result(String, ast.RenderError), Result(String, ast.RenderError)),
-          f: fn(#(String, String)) -> String,
-        ) -> Result(String, ast.RenderError) {
-          use first <- result.try(x.0)
-          use last <- result.try(x.1)
-          Ok(f(#(first, last)))
-        },
-        Ok,
-      )
+      tight_list_item(contents, refs)
     }
   }
 }
@@ -253,17 +283,7 @@ fn list_item_to_html_safe(
     ast.ListItem(contents) ->
       loose_list_item(contents |> list.map(block_to_html_safe(_, refs, False)))
     ast.TightListItem(contents) -> {
-      let passthrough = fn(x: a, f: fn(a) -> b) -> b { f(x) }
-      tight_list_item(
-        contents,
-        refs,
-        block_to_html_safe,
-        identity,
-        passthrough,
-        passthrough,
-        passthrough,
-        identity,
-      )
+      tight_list_item_safe(contents, refs)
     }
   }
 }
