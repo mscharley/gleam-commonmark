@@ -1,4 +1,5 @@
-import commonmark
+import commonmark.{parse}
+import commonmark/html.{render_to_html}
 import glychee/benchmark
 import glychee/configuration
 import simplifile
@@ -16,13 +17,13 @@ pub fn main() {
     [
       benchmark.Function(label: "parse only", callable: fn(test_data) {
         fn() {
-          test_data |> commonmark.parse
+          test_data |> parse
           Nil
         }
       }),
       benchmark.Function(label: "render", callable: fn(test_data) {
         fn() {
-          test_data |> commonmark.render_to_html
+          test_data |> render_to_html
           Nil
         }
       }),
