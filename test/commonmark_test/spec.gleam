@@ -1,13 +1,7 @@
-import commonmark/html as commonmark
-import gleam/dict
-import gleam/dynamic.{field, int as int_field, list, string}
-import gleam/int
-import gleam/json
+import commonmark_test/helpers
 import gleam/list
 import gleam/option.{None}
-import simplifile
-import startest.{describe, it, xit}
-import startest/expect
+import startest
 
 const spec_file = "./test/commonmark_test/spec-0.31.2.json"
 
@@ -24,6 +18,11 @@ const html_tests = [
   629, 630, 631, 632,
   // Other tests that rely on inline HTML
   31, 344, 475, 476, 477, 491,
+]
+
+const ignore_roundtrip = [
+  39, 81, 82, 95, 109, 123, 124, 127, 134, 228, 229, 230, 232, 244, 281, 283,
+  320, 321, 329, 330, 331, 339, 489, 492, 499, 509,
 ]
 
 /// This is a list of expected failures
@@ -46,81 +45,18 @@ const blacklist = [
 /// Run only this test
 const only = None
 
-type Test {
-  Test(example: Int, markdown: String, html: String, section: String)
-}
-
 pub fn commonmark_spec_tests() {
-  let spec_decoder =
-    list(dynamic.decode4(
-      Test,
-      field("example", of: int_field),
-      field("markdown", of: string),
-      field("html", of: string),
-      field("section", of: string),
-    ))
+  let spec = helpers.parse_json_spec(spec_file)
 
-  let assert Ok(spec_json) = spec_file |> simplifile.read
-  let assert Ok(specs) = spec_json |> json.decode(spec_decoder)
-
-  describe(
+  startest.describe(
     "CommonMark spec",
-    specs
-      |> list.filter(fn(s) { !list.contains(html_tests, s.example) })
-      |> list.group(fn(s) { s.section })
-      |> dict.to_list
-      |> list.map(run_section),
+    helpers.run_spec(
+      spec
+        |> list.filter(fn(s) { !list.contains(html_tests, s.example) }),
+      blacklist,
+      invalid_tests,
+      ignore_roundtrip,
+      only,
+    ),
   )
-}
-
-fn run_section(ts: #(String, List(Test))) {
-  let #(title, reversed_tests) = ts
-  let tests = list.reverse(reversed_tests)
-
-  describe(
-    title,
-    list.concat([
-      list.map(tests, run_safe_test),
-      list.map(
-        tests |> list.filter(fn(t) { !list.contains(invalid_tests, t) }),
-        run_strict_test,
-      ),
-    ]),
-  )
-}
-
-fn run_safe_test(t: Test) {
-  let allowed =
-    only
-    |> option.map(fn(n) { n == t.example })
-    |> option.lazy_unwrap(fn() { !list.contains(blacklist, t.example) })
-
-  let f = case allowed {
-    True -> it
-    False -> xit
-  }
-
-  f("Example " <> int.to_string(t.example), fn() {
-    t.markdown
-    |> commonmark.render_to_html
-    |> expect.to_equal(t.html)
-  })
-}
-
-fn run_strict_test(t: Test) {
-  let allowed =
-    only
-    |> option.map(fn(n) { n == t.example })
-    |> option.lazy_unwrap(fn() { !list.contains(blacklist, t.example) })
-
-  let f = case allowed {
-    True -> it
-    False -> xit
-  }
-
-  f("Example " <> int.to_string(t.example) <> " (strict)", fn() {
-    t.markdown
-    |> commonmark.render_to_html_strict
-    |> expect.to_equal(Ok(t.html))
-  })
 }

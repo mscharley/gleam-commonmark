@@ -1,4 +1,5 @@
 import commonmark/ast
+import commonmark/internal/definitions
 import commonmark/internal/parser/entity
 import gleam/int
 import gleam/list
@@ -46,18 +47,8 @@ type InlineWrapper {
   Strikethrough(Int, List(InlineWrapper))
 }
 
-pub const replacement_char = 0xfffd
-
-pub const insecure_codepoints = [0]
-
-const ascii_punctuation = [
-  "!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/",
-  ":", ";", "<", "=", ">", "?", "@", "[", "]", "\\", "^", "_", "`", "{", "|",
-  "}", "~",
-]
-
 fn replace_insecure_byte(n: Int) {
-  case list.contains(insecure_codepoints, n) {
+  case list.contains(definitions.insecure_codepoints, n) {
     True -> 0xfffd
     False -> n
   }
@@ -236,7 +227,7 @@ fn do_lex_inline_text(
           }
       }
     ["\\", g, ..xs] ->
-      case list.contains(ascii_punctuation, g) {
+      case list.contains(definitions.ascii_punctuation, g) {
         True -> do_lex_inline_text(xs, [Escaped(g), ..acc])
         False ->
           case acc {
@@ -791,7 +782,10 @@ fn do_finalise_plain_text(
 ) {
   case ast, acc {
     [], [ast.PlainText(y), ..ys] if trim_ends ->
-      [ast.PlainText(trim_right(y)), ..ys] |> list.reverse
+      case trim_right(y) {
+        "" -> list.reverse(ys)
+        t -> [ast.PlainText(t), ..ys] |> list.reverse
+      }
     [], _ -> acc |> list.reverse
     [ast.PlainText(""), ..xs], _ -> do_finalise_plain_text(xs, acc, trim_ends)
     [ast.StrongEmphasis(content, marker), ..xs], _ ->
@@ -828,20 +822,18 @@ fn do_finalise_plain_text(
     | [ast.PlainText(x), ..xs], [ast.SoftLineBreak, ..]
       if trim_ends
     ->
-      do_finalise_plain_text(
-        xs,
-        [ast.PlainText(trim_left(x)), ..acc],
-        trim_ends,
-      )
+      case trim_left(x) {
+        "" -> do_finalise_plain_text(xs, acc, trim_ends)
+        t -> do_finalise_plain_text(xs, [ast.PlainText(t), ..acc], trim_ends)
+      }
     [ast.HardLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
     | [ast.SoftLineBreak as x, ..xs], [ast.PlainText(y), ..ys]
       if trim_ends
     ->
-      do_finalise_plain_text(
-        xs,
-        [x, ast.PlainText(trim_right(y)), ..ys],
-        trim_ends,
-      )
+      case trim_right(y) {
+        "" -> do_finalise_plain_text(xs, [x, ..ys], trim_ends)
+        t -> do_finalise_plain_text(xs, [x, ast.PlainText(t), ..ys], trim_ends)
+      }
     [x, ..xs], _ -> do_finalise_plain_text(xs, [x, ..acc], trim_ends)
   }
 }

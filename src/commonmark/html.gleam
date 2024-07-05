@@ -1,4 +1,4 @@
-//// HTML renderer for CommonMark
+//// HTML renderer for CommonMark.
 ////
 //// This is the built-in renderer that can render to a HTML string. This is the most
 //// compliant option as it is directly tested against the specs with no regard to how

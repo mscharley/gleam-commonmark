@@ -9,8 +9,8 @@
 //// * CommonMark - via `commonmark/commonmark` included in the `commonmark` package.
 
 import commonmark/ast
+import commonmark/internal/definitions.{insecure_codepoints, replacement_char}
 import commonmark/internal/parser/block.{parse_document}
-import commonmark/internal/parser/inline.{insecure_codepoints, replacement_char}
 import gleam/list
 import gleam/regex
 import gleam/result
