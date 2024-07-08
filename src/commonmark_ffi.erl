@@ -13,12 +13,12 @@ get_regex(String, Line) ->
 			             message => <<"Assertion pattern match failed"/utf8>>,
 			             value => _assert_fail,
 			             module => <<"commonmark_ffi"/utf8>>,
-			             function => <<"get_platform_regexes"/utf8>>,
+			             function => <<"get_static_regexes"/utf8>>,
 			             line => Line})
 	end,
 	Re.
 
--spec get_static_regexes() -> {gleam@regex:regex(), gleam@regex:regex()}.
+-spec get_static_regexes() -> commonmark@internal@definitions:parser_regexes().
 get_static_regexes() ->
 	case catch persistent_term:get(commonmark_ffi) of
 		{ 'EXIT', { badarg, _ } } -> 
