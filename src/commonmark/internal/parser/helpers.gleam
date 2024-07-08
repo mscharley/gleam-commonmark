@@ -3,8 +3,6 @@ import gleam/int
 import gleam/option.{type Option, None, Some}
 import gleam/string
 
-pub const tab_stop = "(?: {0,3}\t|    )"
-
 pub fn ol_marker(marker: String) -> ast.OrderedListMarker {
   case marker {
     "." -> ast.PeriodListMarker
@@ -25,7 +23,7 @@ pub fn ul_marker(marker: String) -> ast.UnorderedListMarker {
 pub fn indent_pattern(indent: Int) -> String {
   case indent {
     0 -> ""
-    i if i >= 4 -> tab_stop <> indent_pattern(i - 4)
+    i if i >= 4 -> "(?: {0,3}\t|    )" <> indent_pattern(i - 4)
     i -> "(?: {" <> int.to_string(i) <> "}|\t)"
   }
 }

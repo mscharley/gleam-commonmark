@@ -1,6 +1,7 @@
 import commonmark/ast
+import commonmark/internal/definitions.{type ParserRegexes, ParserRegexes}
 import commonmark/internal/parser/helpers.{
-  determine_indent, indent_pattern, ol_marker, tab_stop, trim_indent, ul_marker,
+  determine_indent, indent_pattern, ol_marker, trim_indent, ul_marker,
 }
 import commonmark/internal/parser/inline.{parse_text}
 import gleam/dict
@@ -8,7 +9,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
-import gleam/regex.{type Regex, Match}
+import gleam/regex.{Match}
 import gleam/result
 import gleam/string
 
@@ -51,49 +52,6 @@ type BlockParseState {
   Alert(ast.AlertLevel, List(BlockParseState))
   UnorderedList(List(List(BlockParseState)), Bool, ast.UnorderedListMarker)
   OrderedList(List(List(BlockParseState)), Int, Bool, ast.OrderedListMarker)
-}
-
-type ParserRegexes {
-  ParserRegexes(
-    atx_header: Regex,
-    block_quote: Regex,
-    fenced_code_start: Regex,
-    hr: Regex,
-    indented_code: Regex,
-    ol: Regex,
-    setext_header: Regex,
-    ul: Regex,
-  )
-}
-
-@external(erlang, "commonmark_ffi", "get_platform_regexes")
-@external(javascript, "../../../commonmark_ffi.mjs", "get_platform_regexes")
-fn get_platform_regexes() -> #(Regex, Regex)
-
-fn create_regexes() -> ParserRegexes {
-  let #(hr_regex, fenced_code_start_regex) = get_platform_regexes()
-  let assert Ok(atx_header_regex) =
-    regex.from_string("^ {0,3}(#{1,6})([ \t]+.*?)?(?:(?<=[ \t])#*)?[ \t]*$")
-  let assert Ok(setext_header_regex) =
-    regex.from_string("^ {0,3}([-=])+[ \t]*$")
-  let assert Ok(valid_indented_code_regex) =
-    regex.from_string("^" <> tab_stop <> "|^[ \t]*$")
-  let assert Ok(block_quote_regex) = regex.from_string("^ {0,3}> ?(.*)$")
-  let assert Ok(ul_regex) =
-    regex.from_string("^( {0,3})([-*+])(?:( {1,4})(.*))?$")
-  let assert Ok(ol_regex) =
-    regex.from_string("^( {0,3})([0-9]{1,9})([.)])(?:( {1,4})(.*))?$")
-
-  ParserRegexes(
-    atx_header: atx_header_regex,
-    hr: hr_regex,
-    setext_header: setext_header_regex,
-    fenced_code_start: fenced_code_start_regex,
-    indented_code: valid_indented_code_regex,
-    block_quote: block_quote_regex,
-    ul: ul_regex,
-    ol: ol_regex,
-  )
 }
 
 fn merge_references(refs: List(ast.ReferenceList)) -> ast.ReferenceList {
@@ -1092,7 +1050,7 @@ fn parse_blocks(lines: List(String), pr: ParserRegexes) -> List(BlockParseState)
 }
 
 pub fn parse_document(lines: List(String)) -> ast.Document {
-  let parser_regexes = create_regexes()
+  let parser_regexes = definitions.get_parser_regexes()
 
   let #(blocks, refs) =
     parse_blocks(lines, parser_regexes)
