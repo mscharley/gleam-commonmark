@@ -8,7 +8,7 @@ pub fn main() {
   // Configuration is optional
   configuration.initialize()
   configuration.set_pair(configuration.Warmup, 2)
-  configuration.set_pair(configuration.Parallel, 2)
+  configuration.set_pair(configuration.Parallel, 4)
 
   let assert Ok(readme) = simplifile.read("../README.md")
 

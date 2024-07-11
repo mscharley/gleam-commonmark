@@ -161,6 +161,7 @@ fn do_parse_blocks(
     block_quote: block_quote_regex,
     ul: ul_regex,
     ol: ol_regex,
+    ..,
   ) = pr
   let assert Ok(fenced_code_regex) = case state {
     FencedCodeBlockBuilder(break, _, _, _, _) ->

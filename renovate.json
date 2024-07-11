@@ -5,8 +5,7 @@
 	],
 	"gleam": {
 		"fileMatch": [
-			"(^|/)gleam\\.toml$",
-			"(^|/)demo/gleam\\.toml$"
+			"(^|/)gleam\\.toml$"
 		],
 		"packageRules": [
 			{
