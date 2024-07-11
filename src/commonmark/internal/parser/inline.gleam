@@ -171,8 +171,11 @@ fn match_entity(
 ) -> Result(#(List(String), String, String), Nil) {
   entity.match_html_entity(input)
   |> result.try_recover(fn(_) {
-    let assert Ok(dec_entity) = regex.from_string("^#([0-9]{1,7});")
-    let assert Ok(hex_entity) = regex.from_string("^#([xX]([0-9a-fA-F]{1,6}));")
+    let definitions.ParserRegexes(
+      dec_entity: dec_entity,
+      hex_entity: hex_entity,
+      ..,
+    ) = definitions.get_parser_regexes()
     let potential = list.take(input, 9) |> string.join("")
 
     case regex.scan(dec_entity, potential), regex.scan(hex_entity, potential) {
@@ -261,13 +264,8 @@ fn parse_code_span(
 }
 
 fn parse_autolink(href: List(InlineWrapper)) -> Result(InlineWrapper, Nil) {
-  // Borrowed direct from the spec
-  let assert Ok(email_regex) =
-    regex.from_string(
-      "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
-    )
-  let assert Ok(uri_regex) =
-    regex.from_string("^[a-zA-Z][-a-zA-Z+.]{1,31}:[^ \t]+$")
+  let definitions.ParserRegexes(email: email_regex, uri: uri_regex, ..) =
+    definitions.get_parser_regexes()
   let href_str = list_to_string(href)
 
   case regex.check(email_regex, href_str), regex.check(uri_regex, href_str) {
@@ -690,7 +688,8 @@ fn do_parse_inline_ast(
     [BacktickString(count), ..ws] ->
       do_parse_inline_ast(ws, [ast.PlainText(string.repeat("`", count)), ..acc])
     [CodeSpan(_, contents), ..ws] -> {
-      let assert Ok(r) = regex.from_string("^ (.*) $")
+      let definitions.ParserRegexes(code_span_unwrap: r, ..) =
+        definitions.get_parser_regexes()
       let c = contents |> list_to_string |> string.replace("\n", " ")
 
       case regex.scan(r, c) {

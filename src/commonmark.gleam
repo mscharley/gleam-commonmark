@@ -18,7 +18,8 @@ import gleam/string
 
 /// Parse a CommonMark document into an AST.
 pub fn parse(document: String) -> ast.Document {
-  let assert Ok(line_splitter) = regex.from_string("\r?\n|\r\n?")
+  let definitions.ParserRegexes(line_splitter: line_splitter, ..) =
+    definitions.get_parser_regexes()
   let assert Ok(replacement_string) =
     replacement_char
     |> string.utf_codepoint
