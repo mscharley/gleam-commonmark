@@ -3,6 +3,19 @@
 	"extends": [
 		"local>mscharley/renovate-config"
 	],
+	"gleam": {
+		"packageRules": [
+			{
+				"fileMatch": [
+					"(^|/)gleam\\.toml$"
+				],
+				"matchDepTypes": [
+					"devDependencies"
+				],
+				"rangeStrategy": "auto"
+			}
+		]
+	},
 	"minor": {
 		"automerge": false
 	},
