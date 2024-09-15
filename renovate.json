@@ -4,9 +4,6 @@
 		"local>mscharley/renovate-config"
 	],
 	"gleam": {
-		"fileMatch": [
-			"(^|/)gleam\\.toml$"
-		],
 		"packageRules": [
 			{
 				"matchDepTypes": [
