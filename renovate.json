@@ -12,14 +12,5 @@
 				"rangeStrategy": "auto"
 			}
 		]
-	},
-	"minor": {
-		"automerge": false
-	},
-	"patch": {
-		"automerge": false
-	},
-	"pin": {
-		"automerge": false
 	}
 }
