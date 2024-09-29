@@ -38,7 +38,7 @@
 	"homepage": "https://github.com/mscharley/gleam-commonmark#readme",
 	"devDependencies": {
 		"@microsoft/api-extractor": "7.47.9",
-		"@types/node": "20.16.8",
+		"@types/node": "20.16.9",
 		"esbuild": "0.24.0"
 	}
 }
