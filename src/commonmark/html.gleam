@@ -4,6 +4,10 @@
 //// compliant option as it is directly tested against the specs with no regard to how
 //// you would actually use the output or style it.
 
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import commonmark.{parse}
 import commonmark/ast
 import commonmark/internal/renderer/html

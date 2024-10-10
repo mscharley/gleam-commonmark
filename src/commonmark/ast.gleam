@@ -9,6 +9,10 @@
 //// * A block contains either other blocks or a list of inline elements
 //// * Inline elements define the textual contents of the document.
 
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import gleam/dict.{type Dict}
 import gleam/option.{type Option}
 
