@@ -4,7 +4,7 @@
 name = "commonmark"
 version = "0.1.8"
 description = "CommonMark/Markdown implementation for Gleam, for the BEAM or JS"
-licenses = ["MIT"]
+licenses = ["MPL-2.0"]
 links = [
 	{ title = "Demo", href = "https://mscharley.github.io/gleam-commonmark/" },
 	{ title = "Sponsor", href = "https://github.com/sponsors/mscharley" },

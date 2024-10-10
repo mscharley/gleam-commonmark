@@ -8,6 +8,10 @@
 //// * HTML - via `commonmark/html` included in the `commonmark` package.
 //// * CommonMark - via `commonmark/commonmark` included in the `commonmark` package.
 
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import commonmark/ast
 import commonmark/internal/definitions.{insecure_codepoints, replacement_char}
 import commonmark/internal/parser/block.{parse_document}
