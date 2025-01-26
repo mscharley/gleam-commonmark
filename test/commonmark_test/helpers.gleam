@@ -6,7 +6,7 @@ import commonmark.{parse}
 import commonmark/commonmark as renderer
 import commonmark/html
 import gleam/dict
-import gleam/dynamic.{field, int as int_field, list, string}
+import gleam/dynamic.{field, int as int_field, list as list_field, string}
 import gleam/int
 import gleam/json
 import gleam/list
@@ -21,7 +21,7 @@ pub type Test {
 
 pub fn parse_json_spec(spec_path: String) -> List(Test) {
   let spec_decoder =
-    list(dynamic.decode4(
+    list_field(dynamic.decode4(
       Test,
       field("example", of: int_field),
       field("markdown", of: string),
@@ -60,18 +60,21 @@ fn run_section(
 
   describe(
     title,
-    list.concat([
+    list.append(
       list.map(tests, run_safe_test(_, blacklist, only)),
-      list.map(
-        tests
-          |> list.filter(fn(t) { !list.contains(ignore_roundtrip, t.example) }),
-        run_roundtrip_test(_, blacklist, only),
+      list.append(
+        list.map(
+          tests
+            |> list.filter(fn(t) { !list.contains(ignore_roundtrip, t.example) }),
+          run_roundtrip_test(_, blacklist, only),
+        ),
+        list.map(
+          tests
+            |> list.filter(fn(t) { !list.contains(invalid_tests, t.example) }),
+          run_strict_test(_, blacklist, only),
+        ),
       ),
-      list.map(
-        tests |> list.filter(fn(t) { !list.contains(invalid_tests, t.example) }),
-        run_strict_test(_, blacklist, only),
-      ),
-    ]),
+    ),
   )
 }
 

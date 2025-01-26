@@ -21,6 +21,7 @@ repo = "gleam-commonmark"
 [dependencies]
 gleam_stdlib = ">= 0.34.0 and < 2.0.0"
 worm = ">= 1.0.5 and < 2.0.0"
+gleam_regexp = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 birdie = ">= 1.1.6 and < 2.0.0"
