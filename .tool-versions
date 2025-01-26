@@ -1,4 +1,4 @@
-gleam 1.6.3
+gleam 1.7.0
 erlang 27.2.1
 rebar 3.24.0
 nodejs 22.13.1
