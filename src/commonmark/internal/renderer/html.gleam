@@ -189,7 +189,7 @@ fn tight_list_item(
       case b {
         ast.Paragraph(c) ->
           block_to_html(
-            ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])),
+            ast.Paragraph(list.append(c, [ast.SoftLineBreak])),
             refs,
             True,
           )
@@ -237,7 +237,7 @@ fn tight_list_item_safe(
       case b {
         ast.Paragraph(c) ->
           block_to_html_safe(
-            ast.Paragraph(list.concat([c, [ast.SoftLineBreak]])),
+            ast.Paragraph(list.append(c, [ast.SoftLineBreak])),
             refs,
             True,
           )
