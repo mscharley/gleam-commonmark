@@ -6,7 +6,7 @@ import commonmark.{parse}
 import commonmark/commonmark as renderer
 import commonmark/html
 import gleam/dict
-import gleam/dynamic.{field, int as int_field, list, string}
+import gleam/dynamic/decode
 import gleam/int
 import gleam/json
 import gleam/list
@@ -21,16 +21,16 @@ pub type Test {
 
 pub fn parse_json_spec(spec_path: String) -> List(Test) {
   let spec_decoder =
-    list(dynamic.decode4(
-      Test,
-      field("example", of: int_field),
-      field("markdown", of: string),
-      field("html", of: string),
-      field("section", of: string),
-    ))
+    decode.list({
+      use example <- decode.field("example", decode.int)
+      use markdown <- decode.field("markdown", decode.string)
+      use html <- decode.field("html", decode.string)
+      use section <- decode.field("section", decode.string)
+      decode.success(Test(example:, markdown:, html:, section:))
+    })
 
   let assert Ok(spec_json) = spec_path |> simplifile.read
-  let assert Ok(specs) = spec_json |> json.decode(spec_decoder)
+  let assert Ok(specs) = spec_json |> json.parse(spec_decoder)
 
   specs
 }
@@ -60,7 +60,7 @@ fn run_section(
 
   describe(
     title,
-    list.concat([
+    list.flatten([
       list.map(tests, run_safe_test(_, blacklist, only)),
       list.map(
         tests

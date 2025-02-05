@@ -13,7 +13,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
-import gleam/regex.{Match}
+import gleam/regexp.{Match}
 import gleam/result
 import gleam/string
 
@@ -138,9 +138,9 @@ fn parse_block_state(
 /// Returns the list of submatches only.
 fn apply_regex(
   line: String,
-  with regex: regex.Regex,
+  with regex: regexp.Regexp,
 ) -> Result(List(Option(String)), Nil) {
-  case regex.scan(line, with: regex) {
+  case regexp.scan(line, with: regex) {
     [Match(_, submatches)] -> Ok(submatches)
     _ -> Error(Nil)
   }
@@ -169,7 +169,7 @@ fn do_parse_blocks(
   ) = pr
   let assert Ok(fenced_code_regex) = case state {
     FencedCodeBlockBuilder(break, _, _, _, _) ->
-      regex.from_string("^ {0,3}" <> break <> "+[ \t]*$")
+      regexp.from_string("^ {0,3}" <> break <> "+[ \t]*$")
     _ -> Ok(fenced_code_start_regex)
   }
   let l = list.first(lines)
@@ -197,16 +197,16 @@ fn do_parse_blocks(
   let is_ul = result.is_ok(ul_results)
 
   let is_hr =
-    l |> result.map(regex.check(_, with: hr_regex)) |> result.unwrap(False)
+    l |> result.map(regexp.check(_, with: hr_regex)) |> result.unwrap(False)
   let is_indented_code_block =
     l
-    |> result.map(regex.check(_, with: valid_indented_code_regex))
+    |> result.map(regexp.check(_, with: valid_indented_code_regex))
     |> result.unwrap(False)
   let is_list_continuation = case state {
     UnorderedListBuilder(_, _, _, _, indent)
     | OrderedListBuilder(_, _, _, _, _, indent) -> {
       let assert Ok(indent_pattern) =
-        regex.from_string("^" <> indent_pattern(indent) <> "|^[ \t]*$")
+        regexp.from_string("^" <> indent_pattern(indent) <> "|^[ \t]*$")
 
       l |> result.try(apply_regex(_, with: indent_pattern)) |> result.is_ok
     }
