@@ -8,7 +8,7 @@ import commonmark/internal/parser/entity
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/regex.{Match}
+import gleam/regexp.{Match}
 import gleam/result
 import gleam/string
 
@@ -182,13 +182,16 @@ fn match_entity(
     ) = definitions.get_parser_regexes()
     let potential = list.take(input, 9) |> string.join("")
 
-    case regex.scan(dec_entity, potential), regex.scan(hex_entity, potential) {
-      [regex.Match(full, [Some(n)])], _ ->
+    case
+      regexp.scan(dec_entity, potential),
+      regexp.scan(hex_entity, potential)
+    {
+      [regexp.Match(full, [Some(n)])], _ ->
         n
         |> int.parse
         |> translate_numerical_entity(list.drop(input, string.length(full)))
         |> result.map(fn(r) { #(r.0, n, r.1) })
-      _, [regex.Match(full, [Some(m), Some(n)])] ->
+      _, [regexp.Match(full, [Some(m), Some(n)])] ->
         n
         |> int.base_parse(16)
         |> translate_numerical_entity(list.drop(input, string.length(full)))
@@ -272,7 +275,7 @@ fn parse_autolink(href: List(InlineWrapper)) -> Result(InlineWrapper, Nil) {
     definitions.get_parser_regexes()
   let href_str = list_to_string(href)
 
-  case regex.check(email_regex, href_str), regex.check(uri_regex, href_str) {
+  case regexp.check(email_regex, href_str), regexp.check(uri_regex, href_str) {
     True, _ -> Ok(EmailAutolink(href))
     _, True -> Ok(UriAutolink(href))
     False, False -> Error(Nil)
@@ -666,7 +669,7 @@ fn do_late_binding(wrapped: List(InlineWrapper), acc: List(InlineWrapper)) {
       if n > 0
     -> {
       let #(prefix, acc) = parse_emphasis(str, acc)
-      do_late_binding(list.concat([prefix, xs]), acc)
+      do_late_binding(list.flatten([prefix, xs]), acc)
     }
     [x, ..xs] -> do_late_binding(xs, [x, ..acc])
   }
@@ -696,7 +699,7 @@ fn do_parse_inline_ast(
         definitions.get_parser_regexes()
       let c = contents |> list_to_string |> string.replace("\n", " ")
 
-      case regex.scan(r, c) {
+      case regexp.scan(r, c) {
         [Match(_, [Some(span)])] ->
           do_parse_inline_ast(ws, [ast.CodeSpan(span), ..acc])
         _ -> do_parse_inline_ast(ws, [ast.CodeSpan(c), ..acc])
