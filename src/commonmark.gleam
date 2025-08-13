@@ -16,7 +16,7 @@ import commonmark/ast
 import commonmark/internal/definitions.{insecure_codepoints, replacement_char}
 import commonmark/internal/parser/block.{parse_document}
 import gleam/list
-import gleam/regex
+import gleam/regexp
 import gleam/result
 import gleam/string
 
@@ -37,6 +37,6 @@ pub fn parse(document: String) -> ast.Document {
     |> result.map(string.replace(_, in: d, with: replacement_string))
     |> result.unwrap(d)
   })
-  |> regex.split(with: line_splitter)
+  |> regexp.split(with: line_splitter)
   |> parse_document
 }
