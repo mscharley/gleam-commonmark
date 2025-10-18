@@ -39,6 +39,6 @@
 	"devDependencies": {
 		"@microsoft/api-extractor": "7.53.1",
 		"@types/node": "22.18.10",
-		"esbuild": "0.25.10"
+		"esbuild": "0.25.11"
 	}
 }
