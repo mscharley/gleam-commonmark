@@ -1,5 +1,5 @@
 gleam 1.6.3
 erlang 28.5
 rebar 3.27.0
-nodejs 22.23.0
+nodejs 24.18.0
 elixir 1.20.1
