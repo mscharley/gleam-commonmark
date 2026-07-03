@@ -16,7 +16,7 @@ jobs:
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           node-version-file: '.tool-versions'
-      - uses: erlef/setup-beam@e6d7c94229049569db56a7ad5a540c051a010af9 # v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
           version-file: '.tool-versions'
           version-type: 'strict'
@@ -32,7 +32,7 @@ jobs:
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
         with:
           node-version-file: '.tool-versions'
-      - uses: erlef/setup-beam@e6d7c94229049569db56a7ad5a540c051a010af9 # v1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
           version-file: '.tool-versions'
           version-type: 'strict'
